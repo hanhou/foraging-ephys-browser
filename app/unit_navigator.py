@@ -42,9 +42,19 @@ def get_fig_unit_all_in_one(key):
     sess_date_str = datetime.strftime(datetime.strptime(key['session_date'], '%Y-%m-%dT%H:%M:%S'), '%Y%m%d')
     
     fn = f'*{key["h2o"]}_{sess_date_str}_{key["ins"]}*u{key["unit"]:03}*'
-    file = glob.glob(cache_fig_folder + '**/' + fn, recursive=True)[0]
-    img = Image.open(file)
-    img = img.crop((500, 140, 5400, 3000))
+    aoi = key["area_of_interest"]
+    
+    if use_s3:
+        file = fs.glob(cache_fig_folder + ('' if aoi == 'others' else aoi + '/') + fn)
+        if len(file) == 1:
+            with fs.open(file[0]) as f:
+                img = Image.open(f)
+                img = img.crop((500, 140, 5400, 3000))           
+    else:
+        file = glob.glob(cache_fig_folder + ('' if aoi == 'others' else aoi + '/') + fn)
+        if len(file) == 1:
+            img = Image.open(file[0])
+            img = img.crop((500, 140, 5400, 3000))
             
     return img
 
@@ -138,6 +148,7 @@ def plot_scatter(data, x_name='dQ_iti', y_name='sumQ_iti'):
         
 
 st.markdown('## Unit browser')
+st.write('(data fetched from S3)' if use_s3 else '(data fetched from local)')
 
 col3, col4 = st.columns([1, 1.3], gap='small')
 with col3:
