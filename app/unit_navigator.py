@@ -13,6 +13,8 @@ from streamlit_plotly_events import plotly_events
 import plotly.express as px
 import plotly.graph_objects as go
 
+import s3fs
+import os
 
 from streamlit_util import *
 # from pipeline import experiment, ephys, lab, psth_foraging, report, foraging_analysis
@@ -20,13 +22,20 @@ from streamlit_util import *
 
 cache_folder = '/Users/han.hou/s3-drive/st_cache/'
 cache_fig_folder = '/Users/han.hou/Library/CloudStorage/OneDrive-AllenInstitute/pipeline_report/report/all_units/'  # 
-# cache_fig_folder = '/Users/han.hou/s3-drive/all_units/'
+
+if os.path.exists(cache_folder):
+    use_s3 = False
+else:
+    cache_folder = 'aind-behavior-data/Han/ephys/report/st_cache/'
+    cache_fig_folder = 'aind-behavior-data/Han/ephys/report/all_units/'
+    
+    fs = s3fs.S3FileSystem(anon=False)
+    use_s3 = True
 
 st.set_page_config(layout="wide", page_title='Foraging unit navigator')
 
 if 'selected_points' not in st.session_state:
     st.session_state['selected_points'] = []
-
 
 @st.experimental_memo
 def get_fig_unit_all_in_one(key):
@@ -48,13 +57,13 @@ def get_fig_unit_all_in_one(key):
 def load_data(tables=['sessions']):
     df = {}
     for table in tables:
-        # with st.spinner(f'Load {table}...'):
-            # if not always_refetch and Path(cache_folder + f'{table}.pkl').exists():
-            # f'Table {table} read from cache'
-        df[table] = pd.read_pickle(cache_folder + f'{table}.pkl')
-            # else:
-            #     f'Table {table} fetched'
-            #     df[table] = table_mapping[table]()
+        file_name = cache_folder + f'{table}.pkl'
+        if use_s3:
+            with fs.open(file_name) as f:
+                df[table] = pd.read_pickle(f)
+        else:
+            df[table] = pd.read_pickle(file_name)
+        
     return df
     
 

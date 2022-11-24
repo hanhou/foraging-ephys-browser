@@ -4,3 +4,4 @@ numpy
 streamlit
 streamlit-aggrid
 streamlit-plotly-events
+s3fs
