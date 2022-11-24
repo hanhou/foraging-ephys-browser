@@ -8,7 +8,6 @@ import numpy as np
 from datetime import datetime
 
 from PIL import Image
-import mpld3
 import streamlit.components.v1 as components
 from streamlit_plotly_events import plotly_events
 import plotly.express as px
