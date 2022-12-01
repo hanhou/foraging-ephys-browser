@@ -89,7 +89,7 @@ def get_fig(key):
     return fig   
 
 
-# @st.experimental_memo
+@st.experimental_memo
 def plot_scatter(data, x_name='dQ_iti', y_name='sumQ_iti'):
     fig = px.scatter(data, x=x_name, y=y_name, 
                      color='area_of_interest', symbol="area_of_interest",
@@ -101,25 +101,18 @@ def plot_scatter(data, x_name='dQ_iti', y_name='sumQ_iti'):
     fig.add_hline(y=-2.0, line_width=1, line_dash="dash", line_color="black")
 
     fig.add_hline(y=2.0, line_width=1, line_dash="dash", line_color="black")
-    
-    fig.update_xaxes(range=[-40, 40])
-    fig.update_yaxes(range=[-40, 40])
-    
-    fig.update_layout(width = 800, height = 800)
-    
-    fig.update_yaxes(
-        scaleanchor = "x",
-        scaleratio = 1,
-    )
-    
-    if len(st.session_state.selected_points):
-        fig.add_trace(go.Scatter(x=[st.session_state.selected_points[0]['x']], 
-                                 y=[st.session_state.selected_points[0]['y']], 
-                            mode = 'markers',
-                            marker_symbol = 'star',
-                            marker_size = 15,
-                            name='selected'))
         
+    # fig.update_xaxes(range=[-40, 40])
+    # fig.update_yaxes(range=[-40, 40])
+    
+    # fig.update_layout(width = 800, height = 800)
+    
+    if x_name[:3] == y_name[:3]:
+        fig.update_yaxes(
+            scaleanchor = "x",
+            scaleratio = 1,
+        )
+            
     return fig
 
 # ------- Layout starts here -------- #
@@ -152,27 +145,45 @@ st.write('(data fetched from S3)' if use_s3 else '(data fetched from local)')
 
 col3, col4 = st.columns([1, 1.3], gap='small')
 with col3:
+    # -- 1. unit dataframe --
     selection_units = aggrid_interactive_table_units(df=df['ephys_units'])
     st.write(f"{len(selection_units['data'])} units filtered")
     
+    # -- 2. axes selector -- 
+    unit_stats_names = [keys for keys in df['ephys_units'].keys() if any([s in keys for s in ['dQ', 'sumQ', 'rpe', 'ccf']])]
+    with st.expander("Select X and Y axes", expanded=False):
+        with st.form("axis_selection"):
+            x_name = st.selectbox("x axis", unit_stats_names, index=3)
+            y_name = st.selectbox("y axis", unit_stats_names, index=7)
+            st.form_submit_button("update axes")
+    
     # Writes a component similar to st.write()
     if len(selection_units['data']):
-        fig = plot_scatter(selection_units['data'], x_name='dQ_iti', y_name='sumQ_iti')
-
+        fig = plot_scatter(selection_units['data'], x_name=x_name, y_name=y_name)
+        
+        if len(st.session_state.selected_points):
+            fig.add_trace(go.Scatter(x=[st.session_state.selected_points[0]['x']], 
+                                 y=[st.session_state.selected_points[0]['y']], 
+                            mode = 'markers',
+                            marker_symbol = 'star',
+                            marker_size = 15,
+                            name='selected'))
+        
         # Select other Plotly events by specifying kwargs
         selected_points = plotly_events(fig, click_event=True, hover_event=False, select_event=False,
                                     override_height=800, override_width=800)
                 
 with col4:
-    if len(st.session_state.selected_points) == 1:  # Priority to select on scatter plot
-        key = df['ephys_units'].query(f'dQ_iti == {st.session_state.selected_points[0]["x"]} and sumQ_iti == {st.session_state.selected_points[0]["y"]}')
-        if len(key):
-            unit_fig = get_fig_unit_all_in_one(dict(key.iloc[0]))
-            st.image(unit_fig, output_format='PNG', width=3000)
+    with st.expander("Unit all-in-one"):
+        if len(st.session_state.selected_points) == 1:  # Priority to select on scatter plot
+            key = df['ephys_units'].query(f'{x_name} == {st.session_state.selected_points[0]["x"]} and {y_name} == {st.session_state.selected_points[0]["y"]}')
+            if len(key):
+                unit_fig = get_fig_unit_all_in_one(dict(key.iloc[0]))
+                st.image(unit_fig, output_format='PNG', width=3000)
 
-    elif len(selection_units['selected_rows']) == 1:
-        unit_fig = get_fig_unit_all_in_one(selection_units['selected_rows'][0])
-        st.image(unit_fig, output_format='PNG', width=3000)
+        elif len(selection_units['selected_rows']) == 1:
+            unit_fig = get_fig_unit_all_in_one(selection_units['selected_rows'][0])
+            st.image(unit_fig, output_format='PNG', width=3000)
         
 if selected_points and selected_points != st.session_state.selected_points:
     st.session_state.selected_points = selected_points
