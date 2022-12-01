@@ -37,7 +37,7 @@ st.set_page_config(layout="wide", page_title='Foraging unit navigator')
 if 'selected_points' not in st.session_state:
     st.session_state['selected_points'] = []
 
-@st.experimental_memo
+@st.experimental_memo(ttl=24*3600)
 def get_fig_unit_all_in_one(key):
     sess_date_str = datetime.strftime(datetime.strptime(key['session_date'], '%Y-%m-%dT%H:%M:%S'), '%Y%m%d')
     
@@ -63,7 +63,7 @@ def get_fig_unit_all_in_one(key):
 #     'ephys_units': fetch_ephys_units,
 # }
 
-@st.experimental_memo
+@st.experimental_memo(ttl=24*3600)
 def load_data(tables=['sessions']):
     df = {}
     for table in tables:
@@ -80,7 +80,7 @@ def load_data(tables=['sessions']):
 df = load_data(['sessions', 'ephys_units'])
 
 
-@st.experimental_memo
+@st.experimental_memo(ttl=24*3600)
 def get_fig(key):
     fig = plt.figure(figsize=(8, 3), constrained_layout=True)
     ax = fig.subplots(1,1)
@@ -89,7 +89,7 @@ def get_fig(key):
     return fig   
 
 
-@st.experimental_memo
+@st.experimental_memo(ttl=24*3600)
 def plot_scatter(data, x_name='dQ_iti', y_name='sumQ_iti'):
     fig = px.scatter(data, x=x_name, y=y_name, 
                      color='area_of_interest', symbol="area_of_interest",
