@@ -124,11 +124,15 @@ def plot_scatter(data, x_name='dQ_iti', y_name='sumQ_iti'):
 
 @st.experimental_memo(ttl=24*3600)
 def load_ccf():
-    stack, hdr = nrrd.read(cache_folder + f'annotation_{CCF_RESOLUTION}.nrrd')  
-    hexcode = pd.read_csv(cache_folder + 'hexcode.csv', header=None, index_col=0)
-    hexcode.loc[0] = 'FFFFFF' # Add white
+    nrrd_file = f'./data/annotation_{CCF_RESOLUTION}.nrrd'
+    color_file = './data/hexcode.csv'
+    region_file = './data/mousebrainontology_2.csv'
     
-    regions = pd.read_csv(cache_folder + 'mousebrainontology_2.csv', header=None, index_col=0)
+    stack, hdr = nrrd.read(nrrd_file)  
+    hexcode = pd.read_csv(color_file, header=None, index_col=0)
+    regions = pd.read_csv(region_file, header=None, index_col=0)
+  
+    hexcode.loc[0] = 'FFFFFF' # Add white
     regions.loc[0] = ''
     
     return stack, hdr, hexcode, regions
