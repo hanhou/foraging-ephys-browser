@@ -6,19 +6,26 @@ import glob
 import matplotlib.pyplot as plt
 import numpy as np
 from datetime import datetime
-
-from PIL import Image
-import streamlit.components.v1 as components
-from streamlit_plotly_events import plotly_events
-import plotly.express as px
-import plotly.graph_objects as go
-
 import s3fs
 import os
+
+import nrrd
+from PIL import Image, ImageColor
+import streamlit.components.v1 as components
+from streamlit_plotly_events import plotly_events
+import streamlit_nested_layout
+
+import plotly.express as px
+import plotly.graph_objects as go
+from plotly.utils import image_array_to_data_uri
+
 
 from streamlit_util import *
 # from pipeline import experiment, ephys, lab, psth_foraging, report, foraging_analysis
 # from pipeline.plot import foraging_model_plot
+
+CCF_RESOLUTION = 25
+
 
 cache_folder = '/Users/han.hou/s3-drive/st_cache/'
 cache_fig_folder = '/Users/han.hou/Library/CloudStorage/OneDrive-AllenInstitute/pipeline_report/report/all_units/'  # 
@@ -107,13 +114,81 @@ def plot_scatter(data, x_name='dQ_iti', y_name='sumQ_iti'):
     
     # fig.update_layout(width = 800, height = 800)
     
-    if x_name[:3] == y_name[:3]:
+    if all(any([s in name for s in ['dQ', 'sumQ', 'rpe']]) for name in [x_name, y_name]):
         fig.update_yaxes(
             scaleanchor = "x",
             scaleratio = 1,
         )
             
     return fig
+
+@st.experimental_memo(ttl=24*3600)
+def load_ccf():
+    stack, hdr = nrrd.read(cache_folder + f'annotation_{CCF_RESOLUTION}.nrrd')  
+    hexcode = pd.read_csv(cache_folder + 'hexcode.csv', header=None, index_col=0)
+    hexcode.loc[0] = 'FFFFFF' # Add white
+    
+    regions = pd.read_csv(cache_folder + 'mousebrainontology_2.csv', header=None, index_col=0)
+    regions.loc[0] = ''
+    
+    return stack, hdr, hexcode, regions
+   
+
+@st.experimental_memo(ttl=24*3600, persist='disk')
+def get_coronal_slice(ccf_x):
+    
+    stack, _, hexcode, regions = load_ccf()
+    ccf_x_ind = round(ccf_x / CCF_RESOLUTION)
+    coronal_slice = stack[ccf_x_ind, :, :]
+    
+    coronal_slice_color = np.full((coronal_slice.shape[0], coronal_slice.shape[1], 3), np.nan)
+    coronal_slice_name = np.full((coronal_slice.shape[0], coronal_slice.shape[1], 1), '', dtype=object)
+    
+    for area_code in np.unique(coronal_slice):
+        matched_ind = np.where(coronal_slice == area_code)
+        dv_ind, lr_ind = matched_ind
+        
+        color_code = hexcode.loc[area_code, 1]
+        if color_code == '19399':  color_code = '038da6' # Bug fix of missing color
+        c_rgb = ImageColor.getcolor("#" + color_code, "RGB")
+
+        coronal_slice_color[dv_ind, lr_ind, :] = c_rgb
+        coronal_slice_name[dv_ind, lr_ind, 0] = regions.loc[area_code, 1]
+        
+    return coronal_slice_color, coronal_slice_name
+
+@st.experimental_memo(ttl=24*3600, experimental_allow_widgets=True)
+def plot_coronal_slice_unit(ccf_x):
+
+    coronal_slice, coronal_slice_name = get_coronal_slice(ccf_x)
+
+    img_str = image_array_to_data_uri(
+            coronal_slice.astype(np.uint8),
+            backend='auto',
+            compression=1,
+            ext='png', 
+            )
+        
+    hovertemplate = "%%{customdata[0]}<br>%s: %%{x}<br>%s: %%{y}<extra></extra>" % (
+            "ccf_z (left -> right)",
+            "ccf_y (top -> down)",)
+    
+    traces = go.Image(source=img_str, x0=0, y0=0, dx=CCF_RESOLUTION, dy=CCF_RESOLUTION,
+                      hovertemplate=hovertemplate, customdata=coronal_slice_name)
+    fig = go.Figure()
+    fig.add_trace(traces)
+    fig.update_layout(width=2000, height=800)
+    
+    
+    # fig = px.imshow(coronal_slice.astype(np.uint8), x=np.r_[range(coronal_slice.shape[1])] * CCF_RESOLUTION, 
+    #                                y=np.r_[range(coronal_slice.shape[0])] * CCF_RESOLUTION,
+    #                                width=2000, height=800,
+    #                                labels={'x': 'ccf_z (left -> right)', 'y': 'ccf_y (top -> down)'})
+    
+    st.plotly_chart(fig, use_container_width=True)
+    # st.pyplot(fig)
+    return
+
 
 # ------- Layout starts here -------- #
 
@@ -143,7 +218,7 @@ def plot_scatter(data, x_name='dQ_iti', y_name='sumQ_iti'):
 st.markdown('## Unit browser')
 st.write('(data fetched from S3)' if use_s3 else '(data fetched from local)')
 
-col3, col4 = st.columns([1, 1.3], gap='small')
+col3, col4 = st.columns([1, 2], gap='small')
 with col3:
     # -- 1. unit dataframe --
     selection_units = aggrid_interactive_table_units(df=df['ephys_units'])
@@ -153,8 +228,11 @@ with col3:
     unit_stats_names = [keys for keys in df['ephys_units'].keys() if any([s in keys for s in ['dQ', 'sumQ', 'rpe', 'ccf']])]
     with st.expander("Select X and Y axes", expanded=False):
         with st.form("axis_selection"):
-            x_name = st.selectbox("x axis", unit_stats_names, index=3)
-            y_name = st.selectbox("y axis", unit_stats_names, index=7)
+            col1, col2 = st.columns([1, 1])
+            with col1:
+                x_name = st.selectbox("x axis", unit_stats_names, index=3)
+            with col2:
+                y_name = st.selectbox("y axis", unit_stats_names, index=7)
             st.form_submit_button("update axes")
     
     # Writes a component similar to st.write()
@@ -171,10 +249,10 @@ with col3:
         
         # Select other Plotly events by specifying kwargs
         selected_points = plotly_events(fig, click_event=True, hover_event=False, select_event=False,
-                                    override_height=800, override_width=800)
+                                        override_height=800, override_width=800)
                 
 with col4:
-    with st.expander("Unit all-in-one"):
+    with st.expander("Expand to see all-in-one plot for selected unit"):
         if len(st.session_state.selected_points) == 1:  # Priority to select on scatter plot
             key = df['ephys_units'].query(f'{x_name} == {st.session_state.selected_points[0]["x"]} and {y_name} == {st.session_state.selected_points[0]["y"]}')
             if len(key):
@@ -184,7 +262,12 @@ with col4:
         elif len(selection_units['selected_rows']) == 1:
             unit_fig = get_fig_unit_all_in_one(selection_units['selected_rows'][0])
             st.image(unit_fig, output_format='PNG', width=3000)
-        
+            
+
+    ccf_x = st.slider("CCF_x", min_value=0, max_value=12000, value=5000, step=100)
+    plot_coronal_slice_unit(ccf_x)
+    
+            
 if selected_points and selected_points != st.session_state.selected_points:
     st.session_state.selected_points = selected_points
     st.session_state.selected_points
