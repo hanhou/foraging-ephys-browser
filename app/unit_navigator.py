@@ -26,9 +26,8 @@ from streamlit_util import *
 
 CCF_RESOLUTION = 25
 
-
-cache_folder = '/Users/han.hou/s3-drive/st_cache/'
-cache_fig_folder = '/Users/han.hou/Library/CloudStorage/OneDrive-AllenInstitute/pipeline_report/report/all_units/'  # 
+cache_folder = 'xxx' # '/Users/han.hou/s3-drive/st_cache/'
+cache_fig_folder = 'xxx' # '/Users/han.hou/Library/CloudStorage/OneDrive-AllenInstitute/pipeline_report/report/all_units/'  # 
 
 if os.path.exists(cache_folder):
     use_s3 = False
@@ -161,16 +160,22 @@ def get_coronal_slice(ccf_x):
         
     return coronal_slice_color, coronal_slice_name
 
-@st.experimental_memo(ttl=24*3600, experimental_allow_widgets=True)
-def plot_coronal_slice_unit(ccf_x):
+@st.experimental_memo(ttl=24*3600, experimental_allow_widgets=True, show_spinner=False)
+def plot_coronal_slice_unit(ccf_x, slice_thickness, if_flip):
 
+    # -- ccf annotation --
     coronal_slice, coronal_slice_name = get_coronal_slice(ccf_x)
+    
+    if if_flip:
+        max_x = int(np.ceil(5700 / CCF_RESOLUTION))
+        coronal_slice = coronal_slice[:, :max_x, :]
+        coronal_slice_name = coronal_slice_name[:, :max_x, :]
 
     img_str = image_array_to_data_uri(
             coronal_slice.astype(np.uint8),
             backend='auto',
             compression=1,
-            ext='png', 
+            ext='png',
             )
         
     hovertemplate = "%%{customdata[0]}<br>%s: %%{x}<br>%s: %%{y}<extra></extra>" % (
@@ -181,17 +186,36 @@ def plot_coronal_slice_unit(ccf_x):
                       hovertemplate=hovertemplate, customdata=coronal_slice_name)
     fig = go.Figure()
     fig.add_trace(traces)
-    fig.update_layout(width=2000, height=800)
-    
+    fig.update_layout(width=800 if if_flip else 1000, height= 1200)
     
     # fig = px.imshow(coronal_slice.astype(np.uint8), x=np.r_[range(coronal_slice.shape[1])] * CCF_RESOLUTION, 
     #                                y=np.r_[range(coronal_slice.shape[0])] * CCF_RESOLUTION,
     #                                width=2000, height=800,
     #                                labels={'x': 'ccf_z (left -> right)', 'y': 'ccf_y (top -> down)'})
     
-    st.plotly_chart(fig, use_container_width=True)
+    # -- overlayed units --
+    
+    units_to_overlay = aggrid_outputs['data'].query(f'{ccf_x - slice_thickness/2} < ccf_x and ccf_x <= {ccf_x + slice_thickness/2}')
+    
+    x = units_to_overlay['ccf_z']
+    if if_flip:
+        x[x > 5700] = 5700 * 2 - x[x > 5700]
+    
+    fig.add_trace(go.Scatter(x=x, 
+                             y=units_to_overlay['ccf_y'], 
+                            mode = 'markers',
+                            marker_size = units_to_overlay['dQ_iti_abs'],
+                            hovertemplate= '%{customdata[0]}' + 
+                                            '<br>%{text}' +
+                                            '<br>dQ_iti_abs = %{customdata[1]}'
+                                            '<extra></extra>',
+                            text=units_to_overlay['annotation'],
+                            customdata=np.stack((units_to_overlay['area_of_interest'], units_to_overlay['dQ_iti_abs']), axis=-1)
+                            ))
+    
+    # st.plotly_chart(fig, use_container_width=True)
     # st.pyplot(fig)
-    return
+    return fig
 
 
 # ------- Layout starts here -------- #
@@ -225,8 +249,8 @@ st.write('(data fetched from S3)' if use_s3 else '(data fetched from local)')
 col3, col4 = st.columns([1, 2], gap='small')
 with col3:
     # -- 1. unit dataframe --
-    selection_units = aggrid_interactive_table_units(df=df['ephys_units'])
-    st.write(f"{len(selection_units['data'])} units filtered")
+    aggrid_outputs = aggrid_interactive_table_units(df=df['ephys_units'])
+    st.write(f"{len(aggrid_outputs['data'])} units filtered")
     
     # -- 2. axes selector -- 
     unit_stats_names = [keys for keys in df['ephys_units'].keys() if any([s in keys for s in ['dQ', 'sumQ', 'rpe', 'ccf']])]
@@ -240,39 +264,50 @@ with col3:
             st.form_submit_button("update axes")
     
     # Writes a component similar to st.write()
-    if len(selection_units['data']):
-        fig = plot_scatter(selection_units['data'], x_name=x_name, y_name=y_name)
+    if len(aggrid_outputs['data']):
+        fig = plot_scatter(aggrid_outputs['data'], x_name=x_name, y_name=y_name)
         
         if len(st.session_state.selected_points):
             fig.add_trace(go.Scatter(x=[st.session_state.selected_points[0]['x']], 
-                                 y=[st.session_state.selected_points[0]['y']], 
+                                y=[st.session_state.selected_points[0]['y']], 
                             mode = 'markers',
                             marker_symbol = 'star',
                             marker_size = 15,
                             name='selected'))
         
         # Select other Plotly events by specifying kwargs
-        selected_points = plotly_events(fig, click_event=True, hover_event=False, select_event=False,
+        selected_points_scatter = plotly_events(fig, click_event=True, hover_event=False, select_event=False,
                                         override_height=800, override_width=800)
                 
-with col4:
-    with st.expander("Expand to see all-in-one plot for selected unit"):
+with col4:    
+            
+    # --- coronal slice ---
+    col3, col1, col2  = st.columns((0.5, 1, 1))
+    with col3:
+        if_flip = st.checkbox("Flip to left hemisphere", value=True)
+    with col1:
+        ccf_x = st.slider("CCF_x", min_value=0, max_value=12000, value=5000, step=100)
+    with col2:
+        slice_thickness = st.slider("Slice thickness", min_value= 100, max_value=5000, step=50, value=200)
+        
+    fig = plot_coronal_slice_unit(ccf_x, slice_thickness, if_flip)
+    selected_points_slice = plotly_events(fig, click_event=True, hover_event=False, select_event=False,
+                                          override_height=1200)
+
+    st.write(selected_points_slice)
+
+    with st.expander("Expand to see all-in-one plot for selected unit", expanded=True):
         if len(st.session_state.selected_points) == 1:  # Priority to select on scatter plot
             key = df['ephys_units'].query(f'{x_name} == {st.session_state.selected_points[0]["x"]} and {y_name} == {st.session_state.selected_points[0]["y"]}')
             if len(key):
                 unit_fig = get_fig_unit_all_in_one(dict(key.iloc[0]))
                 st.image(unit_fig, output_format='PNG', width=3000)
 
-        elif len(selection_units['selected_rows']) == 1:
-            unit_fig = get_fig_unit_all_in_one(selection_units['selected_rows'][0])
+        elif len(aggrid_outputs['selected_rows']) == 1:
+            unit_fig = get_fig_unit_all_in_one(aggrid_outputs['selected_rows'][0])
             st.image(unit_fig, output_format='PNG', width=3000)
-            
-
-    ccf_x = st.slider("CCF_x", min_value=0, max_value=12000, value=5000, step=100)
-    plot_coronal_slice_unit(ccf_x)
     
             
-if selected_points and selected_points != st.session_state.selected_points:
-    st.session_state.selected_points = selected_points
-    st.session_state.selected_points
+if selected_points_scatter and selected_points_scatter != st.session_state.selected_points:
+    st.session_state.selected_points = selected_points_scatter
     st.experimental_rerun()
