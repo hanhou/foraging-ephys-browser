@@ -165,8 +165,14 @@ def get_coronal_slice(ccf_x):
 
     return coronal_slice_color, coronal_slice_name, coronal_edges
 
+def _size_mapping(x):
+    x_gamma = x**size_gamma
+    max_x = np.max(x_gamma)
+    min_x = np.min(x_gamma)    
+    return size_range[0] + x_gamma / (max_x - min_x) * (size_range[1] - size_range[0])
+
 @st.experimental_memo(ttl=24*3600, experimental_allow_widgets=True, show_spinner=False)
-def plot_coronal_slice_unit(ccf_x, slice_thickness, if_flip):
+def plot_coronal_slice_unit(ccf_x, slice_thickness, if_flip, *args):
 
     # -- ccf annotation --
     coronal_slice, coronal_slice_name, coronal_edges = get_coronal_slice(ccf_x)
@@ -193,6 +199,15 @@ def plot_coronal_slice_unit(ccf_x, slice_thickness, if_flip):
                       hovertemplate=hovertemplate, customdata=coronal_slice_name)
     fig = go.Figure()
     fig.add_trace(traces)
+    fig.add_trace(go.Scatter(
+        x=[300, 300],
+        y=[0, 300],
+        mode='text',
+        text=[f'AP ~ {ccf_x_to_AP(ccf_x)} mm', f'Slice thickness = {slice_thickness} um'],
+        textfont=dict(size=20),
+        textposition='bottom right',
+        showlegend=False
+    ))
     
     # -- overlay edges
     xx, yy = coronal_edges
@@ -209,28 +224,33 @@ def plot_coronal_slice_unit(ccf_x, slice_thickness, if_flip):
     #                                labels={'x': 'ccf_z (left -> right)', 'y': 'ccf_y (top -> down)'})
     
     # -- overlayed units --
-    units_to_overlay = aggrid_outputs['data'].query(f'{ccf_x - slice_thickness/2} < ccf_x and ccf_x <= {ccf_x + slice_thickness/2}')
-    
-    x = units_to_overlay['ccf_z']
-    if if_flip:
-        x[x > 5700] = 5700 * 2 - x[x > 5700]
-    
-    fig.add_trace(go.Scatter(x=x, 
-                             y=units_to_overlay['ccf_y'],
-                             mode = 'markers',
-                             marker_size = units_to_overlay['dQ_iti_abs'],
-                             marker_color = 'black',
-                             hovertemplate= '"%{customdata[0]}"' + 
-                                            '<br>%{text}' +
-                                            '<br>dQ_iti_abs = %{customdata[1]}'
-                                            '<extra></extra>',
-                             text=units_to_overlay['annotation'],
-                             customdata=np.stack((units_to_overlay['area_of_interest'], units_to_overlay['dQ_iti_abs']), axis=-1),
-                             showlegend=False
-                            ))
+    if len(aggrid_outputs['data']):
+        units_to_overlay = aggrid_outputs['data'].query(f'{ccf_x - slice_thickness/2} < ccf_x and ccf_x <= {ccf_x + slice_thickness/2}')
+        
+        x = units_to_overlay['ccf_z'] + np.random.random(units_to_overlay['ccf_z'].shape) * 30
+        if if_flip:
+            x[x > 5700] = 5700 * 2 - x[x > 5700]
+        
+        fig.add_trace(go.Scatter(x=x, 
+                                y=units_to_overlay['ccf_y'],
+                                mode = 'markers',
+                                marker_size = _size_mapping(units_to_overlay[size_to_map]),
+                                marker_color = 'black',
+                                hovertemplate= '"%{customdata[0]}"' + 
+                                                '<br>%{text}' +
+                                                '<br>%s = %%{customdata[1]}' % (size_to_map) +
+                                                '<extra></extra>',
+                                text=units_to_overlay['annotation'],
+                                customdata=np.stack((units_to_overlay['area_of_interest'], units_to_overlay[size_to_map]), axis=-1),
+                                showlegend=False
+                                ))
     
     fig.update_layout(width=800 if if_flip else 1000, 
-                    height= 1200)
+                      height= 1200,
+                      xaxis_range=[0, 5700 if if_flip else 5700*2],
+                      yaxis_range=[8000, 0],
+                      xaxis_title='ccf_z (left -> right)',
+                      yaxis_title='ccf_y (superior -> inferior)')
     
     # st.plotly_chart(fig, use_container_width=True)
     # st.pyplot(fig)
@@ -276,7 +296,7 @@ with col3:
     
     # -- 2. axes selector -- 
     unit_stats_names = [keys for keys in df['ephys_units'].keys() if any([s in keys for s in ['dQ', 'sumQ', 'rpe', 'ccf']])]
-    with st.expander("Select X and Y axes", expanded=False):
+    with st.expander("Select X and Y axes", expanded=True):
         with st.form("axis_selection"):
             col1, col2 = st.columns([1, 1])
             with col1:
@@ -309,10 +329,13 @@ with col4:
     with col1:
         ccf_x = st.slider("CCF_x", min_value=0, max_value=13100, value=5000, step=100) # whole ccf @ 25um [528x320x456] 
         st.markdown(f'##### AP relative to Bregma ~ {ccf_x_to_AP(ccf_x): .2f} mm') 
+        slice_thickness = st.slider("Slice thickness", min_value= 100, max_value=10000, step=50, value=200)
     with col2:
-        slice_thickness = st.slider("Slice thickness", min_value= 100, max_value=5000, step=50, value=200)
+        size_to_map = st.selectbox("size of scatter plot", [n for n in unit_stats_names if 'ccf' not in n and 'abs' in n], index=0)
+        size_gamma = st.slider("gamma", min_value=0.0, max_value=2.0, value=1.0, step=0.1)
+        size_range = st.slider("size_range", 0, 50, (0, 20))
         
-    fig = plot_coronal_slice_unit(ccf_x, slice_thickness, if_flip)
+    fig = plot_coronal_slice_unit(ccf_x, slice_thickness, if_flip, [size_to_map, size_gamma, size_range], aggrid_outputs)
     selected_points_slice = plotly_events(fig, click_event=True, hover_event=False, select_event=False,
                                           override_height=1200)
 
