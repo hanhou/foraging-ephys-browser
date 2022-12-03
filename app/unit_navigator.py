@@ -42,6 +42,7 @@ st.set_page_config(layout="wide", page_title='Foraging unit navigator')
 
 if 'selected_points' not in st.session_state:
     st.session_state['selected_points'] = []
+    
 
 @st.experimental_memo(ttl=24*3600)
 def get_fig_unit_all_in_one(key):
@@ -137,7 +138,7 @@ def load_ccf():
     return stack, hdr, hexcode, regions
    
 
-@st.experimental_memo(ttl=24*3600, persist='disk')
+@st.experimental_memo(ttl=24*3600, persist='disk', show_spinner=False)
 def get_coronal_slice(ccf_x):
     
     stack, _, hexcode, regions = load_ccf()
@@ -157,44 +158,57 @@ def get_coronal_slice(ccf_x):
 
         coronal_slice_color[dv_ind, lr_ind, :] = c_rgb
         coronal_slice_name[dv_ind, lr_ind, 0] = regions.loc[area_code, 1]
-        
-    return coronal_slice_color, coronal_slice_name
+    
+    # Edge of areas
+    gradient = np.gradient(coronal_slice)
+    coronal_edges = np.nonzero((gradient[0] != 0) + (gradient[1] != 0))
+
+    return coronal_slice_color, coronal_slice_name, coronal_edges
 
 @st.experimental_memo(ttl=24*3600, experimental_allow_widgets=True, show_spinner=False)
 def plot_coronal_slice_unit(ccf_x, slice_thickness, if_flip):
 
     # -- ccf annotation --
-    coronal_slice, coronal_slice_name = get_coronal_slice(ccf_x)
+    coronal_slice, coronal_slice_name, coronal_edges = get_coronal_slice(ccf_x)
     
     if if_flip:
         max_x = int(np.ceil(5700 / CCF_RESOLUTION))
         coronal_slice = coronal_slice[:, :max_x, :]
         coronal_slice_name = coronal_slice_name[:, :max_x, :]
+        coronal_edges = [coord[coronal_edges[1] < max_x] for coord in coronal_edges]
 
     img_str = image_array_to_data_uri(
             coronal_slice.astype(np.uint8),
             backend='auto',
-            compression=1,
+            compression=0,
             ext='png',
             )
         
-    hovertemplate = "%%{customdata[0]}<br>%s: %%{x}<br>%s: %%{y}<extra></extra>" % (
-            "ccf_z (left -> right)",
-            "ccf_y (top -> down)",)
+    hovertemplate = "%{customdata[0]}<extra></extra>"
+            # <br>%s: %%{x}<br>%s: %%{y}<extra></extra>" % (
+            # "ccf_z (left -> right)",
+            # "ccf_y (top -> down)",)
     
     traces = go.Image(source=img_str, x0=0, y0=0, dx=CCF_RESOLUTION, dy=CCF_RESOLUTION,
                       hovertemplate=hovertemplate, customdata=coronal_slice_name)
     fig = go.Figure()
     fig.add_trace(traces)
-    fig.update_layout(width=800 if if_flip else 1000, height= 1200)
     
+    # -- overlay edges
+    xx, yy = coronal_edges
+    fig.add_trace(go.Scatter(x=yy * 25, y=xx * 25, 
+                             mode='markers',
+                             marker={'color': 'rgba(0, 0, 0, 0.5)', 'size': 1},
+                             hoverinfo='skip',
+                             showlegend=False,
+                             ))
+
     # fig = px.imshow(coronal_slice.astype(np.uint8), x=np.r_[range(coronal_slice.shape[1])] * CCF_RESOLUTION, 
     #                                y=np.r_[range(coronal_slice.shape[0])] * CCF_RESOLUTION,
     #                                width=2000, height=800,
     #                                labels={'x': 'ccf_z (left -> right)', 'y': 'ccf_y (top -> down)'})
     
     # -- overlayed units --
-    
     units_to_overlay = aggrid_outputs['data'].query(f'{ccf_x - slice_thickness/2} < ccf_x and ccf_x <= {ccf_x + slice_thickness/2}')
     
     x = units_to_overlay['ccf_z']
@@ -202,20 +216,28 @@ def plot_coronal_slice_unit(ccf_x, slice_thickness, if_flip):
         x[x > 5700] = 5700 * 2 - x[x > 5700]
     
     fig.add_trace(go.Scatter(x=x, 
-                             y=units_to_overlay['ccf_y'], 
-                            mode = 'markers',
-                            marker_size = units_to_overlay['dQ_iti_abs'],
-                            hovertemplate= '%{customdata[0]}' + 
+                             y=units_to_overlay['ccf_y'],
+                             mode = 'markers',
+                             marker_size = units_to_overlay['dQ_iti_abs'],
+                             marker_color = 'black',
+                             hovertemplate= '"%{customdata[0]}"' + 
                                             '<br>%{text}' +
                                             '<br>dQ_iti_abs = %{customdata[1]}'
                                             '<extra></extra>',
-                            text=units_to_overlay['annotation'],
-                            customdata=np.stack((units_to_overlay['area_of_interest'], units_to_overlay['dQ_iti_abs']), axis=-1)
+                             text=units_to_overlay['annotation'],
+                             customdata=np.stack((units_to_overlay['area_of_interest'], units_to_overlay['dQ_iti_abs']), axis=-1),
+                             showlegend=False
                             ))
+    
+    fig.update_layout(width=800 if if_flip else 1000, 
+                    height= 1200)
     
     # st.plotly_chart(fig, use_container_width=True)
     # st.pyplot(fig)
     return fig
+
+def ccf_x_to_AP(ccf_x):
+    return round(5400 - ccf_x)/1000
 
 
 # ------- Layout starts here -------- #
@@ -280,13 +302,13 @@ with col3:
                                         override_height=800, override_width=800)
                 
 with col4:    
-            
     # --- coronal slice ---
     col3, col1, col2  = st.columns((0.5, 1, 1))
     with col3:
         if_flip = st.checkbox("Flip to left hemisphere", value=True)
     with col1:
-        ccf_x = st.slider("CCF_x", min_value=0, max_value=12000, value=5000, step=100)
+        ccf_x = st.slider("CCF_x", min_value=0, max_value=13100, value=5000, step=100) # whole ccf @ 25um [528x320x456] 
+        st.markdown(f'##### AP relative to Bregma ~ {ccf_x_to_AP(ccf_x): .2f} mm') 
     with col2:
         slice_thickness = st.slider("Slice thickness", min_value= 100, max_value=5000, step=50, value=200)
         

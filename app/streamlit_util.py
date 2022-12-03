@@ -75,7 +75,7 @@ def aggrid_interactive_table_units(df: pd.DataFrame):
         df, enableRowGroup=True, enableValue=True, enablePivot=True,
     )
 
-    options.configure_selection(selection_mode="multiple", use_checkbox=True, header_checkbox=True)
+    options.configure_selection(selection_mode="multiple", use_checkbox=False, header_checkbox=True)
     options.configure_side_bar()
     options.configure_selection("single")
      
