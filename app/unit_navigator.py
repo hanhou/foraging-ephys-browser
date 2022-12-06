@@ -201,132 +201,7 @@ def _smooth_heatmap(data, sigma):
                 Z[i][j] = np.nan
     return Z
 
-# @st.experimental_memo(ttl=24*3600, experimental_allow_widgets=True, show_spinner=False)
-def plot_coronal_slice_unit(ccf_x, slice_thickness, if_flip, *args):
-
-    # -- ccf annotation --
-    coronal_slice, coronal_slice_name, coronal_edges = get_slice('coronal', ccf_x)
-    
-    if if_flip:
-        max_x = int(np.ceil(5700 / CCF_RESOLUTION))
-        coronal_slice = coronal_slice[:, :max_x, :]
-        coronal_slice_name = coronal_slice_name[:, :max_x, :]
-        coronal_edges = [coord[coronal_edges[1] < max_x] for coord in coronal_edges]
-
-    img_str = image_array_to_data_uri(
-            coronal_slice.astype(np.uint8),
-            backend='auto',
-            compression=0,
-            ext='png',
-            )
-        
-    hovertemplate = "%{customdata[0]}<extra></extra>"
-            # <br>%s: %%{x}<br>%s: %%{y}<extra></extra>" % (
-            # "ccf_z (left -> right)",
-            # "ccf_y (top -> down)",)
-    
-    traces = go.Image(source=img_str, x0=0, y0=0, dx=CCF_RESOLUTION, dy=CCF_RESOLUTION,
-                      hovertemplate=hovertemplate, customdata=coronal_slice_name)
-    fig = go.Figure()
-    fig.add_trace(traces)
-    fig.add_trace(go.Scatter(
-        x=[300, 300],
-        y=[0, 300],
-        mode='text',
-        text=[f'AP ~ {ccf_x_to_AP(ccf_x)} mm', f'Slice thickness = {slice_thickness} um'],
-        textfont=dict(size=20),
-        textposition='bottom right',
-        showlegend=False
-    ))
-    
-    # -- overlay edges
-    xx, yy = coronal_edges
-    fig.add_trace(go.Scatter(x=yy * 25, y=xx * 25, 
-                             mode='markers',
-                             marker={'color': 'rgba(0, 0, 0, 0.5)', 'size': 1},
-                             hoverinfo='skip',
-                             showlegend=False,
-                             ))
-
-    # fig = px.imshow(coronal_slice.astype(np.uint8), x=np.r_[range(coronal_slice.shape[1])] * CCF_RESOLUTION, 
-    #                                y=np.r_[range(coronal_slice.shape[0])] * CCF_RESOLUTION,
-    #                                width=2000, height=800,
-    #                                labels={'x': 'ccf_z (left -> right)', 'y': 'ccf_y (top -> down)'})
-    
-    # -- overlayed units --
-    if len(aggrid_outputs['data']):
-        units_to_overlay = aggrid_outputs['data'].query(f'{ccf_x - slice_thickness/2} < ccf_x and ccf_x <= {ccf_x + slice_thickness/2}')
-        
-        x = units_to_overlay['ccf_z']
-        y = units_to_overlay['ccf_y']
-        if if_flip:
-            x[x > 5700] = 5700 * 2 - x[x > 5700]
-            
-        if if_ccf_plot_heatmap:
-            tuning_strength_2d = scipy.stats.binned_statistic_2d(x=x, y=y, 
-                                            values=units_to_overlay[size_to_map], 
-                                            statistic=heatmap_aggr_func[0], 
-                                            bins=[np.arange(x.min(), x.max(), heatmap_bin_size),
-                                                  np.arange(y.min(), y.max(), heatmap_bin_size)])
-            
-            Z = _smooth_heatmap(tuning_strength_2d.statistic.T, sigma=heatmap_smooth)
-            
-            fig.add_trace(go.Heatmap(z=Z, 
-                                    x=tuning_strength_2d.x_edge, 
-                                    y=tuning_strength_2d.y_edge,
-                                    zmin=heatmap_color_range[0],
-                                    zmax=heatmap_color_range[1],
-                                    hoverinfo='skip',
-                                    #colorbar=dict(orientation="h", len=1)
-                                    ))
-    
-        
-        if if_ccf_plot_scatter:
-            x = x + np.random.random(x.shape) * 30
-
-            fig.add_trace(go.Scatter(x=x, 
-                                    y=y,
-                                    mode = 'markers',
-                                    marker_size = _size_mapping(units_to_overlay[size_to_map]),
-                                    marker_color = 'black',
-                                    hovertemplate= '"%{customdata[0]}"' + 
-                                                    '<br>%{text}' +
-                                                    '<br>%s = %%{customdata[1]}' % (size_to_map) +
-                                                    '<br>uid = %{customdata[2]}' +
-                                                    '<extra></extra>',
-                                    text=units_to_overlay['annotation'],
-                                    customdata=np.stack((units_to_overlay['area_of_interest'], 
-                                                        units_to_overlay[size_to_map], 
-                                                        units_to_overlay['uid']),
-                                                        axis=-1),
-                                    showlegend=False
-                                    ))
-        
-    fig.update_layout(width=800 if if_flip else 1000, 
-                      height= 1000,
-                      xaxis_range=[0, 5700 if if_flip else 5700*2],
-                      yaxis_range=[8000, 0],
-                      xaxis_title='ccf_z (left -> right)',
-                      yaxis_title='ccf_y (superior -> inferior)',
-                      )
-    
-    
-    # st.plotly_chart(fig, use_container_width=True)
-    # st.pyplot(fig)
-    return fig
-
-# @st.experimental_memo(ttl=24*3600, experimental_allow_widgets=True, show_spinner=False)
-def plot_saggital_slice_unit(ccf_z, slice_thickness, if_flip, *args):
-
-    # -- ccf annotation --
-    slice, slice_name, edges = get_slice('saggital', ccf_z)
-    
-    # if if_flip:
-    #     max_x = int(np.ceil(5700 / CCF_RESOLUTION))
-    #     coronal_slice = coronal_slice[:, :max_x, :]
-    #     coronal_slice_name = coronal_slice_name[:, :max_x, :]
-    #     coronal_edges = [coord[coronal_edges[1] < max_x] for coord in coronal_edges]
-
+def draw_ccf_annotations(slice, slice_name, edges, message):
     img_str = image_array_to_data_uri(
             slice.astype(np.uint8),
             backend='auto',
@@ -347,7 +222,7 @@ def plot_saggital_slice_unit(ccf_z, slice_thickness, if_flip, *args):
         x=[300, 300],
         y=[0, 300],
         mode='text',
-        text=[f'ML ~ {ccf_z_to_ML(ccf_z)} mm', f'Slice thickness = {slice_thickness} um'],
+        text=message,
         textfont=dict(size=20),
         textposition='bottom right',
         showlegend=False
@@ -355,13 +230,126 @@ def plot_saggital_slice_unit(ccf_z, slice_thickness, if_flip, *args):
     
     # -- overlay edges
     xx, yy = edges
-    fig.add_trace(go.Scatter(x=yy * 25, y=xx * 25, 
+    fig.add_trace(go.Scatter(x=yy * CCF_RESOLUTION, y=xx * CCF_RESOLUTION, 
                              mode='markers',
                              marker={'color': 'rgba(0, 0, 0, 0.5)', 'size': 1},
                              hoverinfo='skip',
                              showlegend=False,
                              ))
-   
+    return fig
+
+def draw_ccf_heatmap(fig, x, y, z, slice_name):
+    heatmap = scipy.stats.binned_statistic_2d(x=x, y=y,
+                                values=z, 
+                                statistic=heatmap_aggr_func[0], 
+                                bins=[np.arange(x.min(), x.max(), heatmap_bin_size),
+                                        np.arange(y.min(), y.max(), heatmap_bin_size)])
+    
+    heatmap_smoothed = _smooth_heatmap(heatmap.statistic, sigma=heatmap_smooth)
+    
+    # Build region name
+    heatmap_region = np.full(heatmap_smoothed.shape, '', dtype=object)
+    ind_xs, ind_ys = np.where(~np.isnan(heatmap_smoothed))
+    for ind_x, ind_y in zip(ind_xs, ind_ys):
+        ind_x_ccf = int(np.round(heatmap.x_edge[ind_x] / CCF_RESOLUTION))
+        ind_y_ccf = int(np.round(heatmap.y_edge[ind_y] / CCF_RESOLUTION))
+        heatmap_region[ind_x, ind_y] = (slice_name[ind_y_ccf, ind_x_ccf])
+        
+    fig.add_trace(go.Heatmap(z=heatmap_smoothed.T, 
+                            x=heatmap.x_edge, 
+                            y=heatmap.y_edge,
+                            zmin=heatmap_color_range[0],
+                            zmax=heatmap_color_range[1],
+                            hoverongaps=False,
+                            hovertemplate = "%{customdata[0]}" + 
+                                            "<br>%s: %%{z}" % heatmap_aggr + 
+                                            "<extra></extra>",
+                            customdata=heatmap_region.T,
+                            #colorbar=dict(orientation="h", len=1)
+                            ))
+    return
+
+def draw_ccf_units(fig, x, y, z, aoi, uid):
+    x = x + np.random.random(x.shape) * 30        
+    fig.add_trace(go.Scatter(x=x, 
+                            y=y,
+                            mode = 'markers',
+                            marker_size = _size_mapping(z),
+                            marker_color = 'black',
+                            hovertemplate= '"%{customdata[0]}"' + 
+                                            '<br>%{text}' +
+                                            '<br>%s = %%{customdata[1]}' % (size_to_map) +
+                                            '<br>uid = %{customdata[2]}' +
+                                            '<extra></extra>',
+                            customdata=np.stack((aoi, z, uid), axis=-1),
+                            showlegend=False
+                            ))
+    return
+
+# @st.experimental_memo(ttl=24*3600, experimental_allow_widgets=True, show_spinner=False)
+def plot_coronal_slice_unit(ccf_x, coronal_slice_thickness, if_flip, *args):
+
+    # -- ccf annotation --
+    coronal_slice, coronal_slice_name, coronal_edges = get_slice('coronal', ccf_x)
+    
+    if if_flip:
+        max_x = int(np.ceil(5700 / CCF_RESOLUTION))
+        coronal_slice = coronal_slice[:, :max_x, :]
+        coronal_slice_name = coronal_slice_name[:, :max_x, :]
+        coronal_edges = [coord[coronal_edges[1] < max_x] for coord in coronal_edges]
+        
+    message = [f'AP ~ {ccf_x_to_AP(ccf_x)} mm', 
+               f'Slice thickness = {coronal_slice_thickness} um']
+    fig = draw_ccf_annotations(coronal_slice, coronal_slice_name, 
+                               coronal_edges, message)
+
+    # -- overlayed units --
+    units_to_overlay = aggrid_outputs['data'].query(f'{ccf_x - coronal_slice_thickness/2} < ccf_x and ccf_x <= {ccf_x + coronal_slice_thickness/2}')
+    
+    if len(units_to_overlay):
+    
+        x = units_to_overlay['ccf_z']
+        y = units_to_overlay['ccf_y']
+        z = units_to_overlay[size_to_map]
+
+        if if_flip:
+            x[x > 5700] = 5700 * 2 - x[x > 5700]
+            
+        if if_ccf_plot_heatmap:
+            draw_ccf_heatmap(fig, x, y, z, coronal_slice_name)
+        
+        if if_ccf_plot_scatter:
+            aoi = units_to_overlay['area_of_interest']
+            uid = units_to_overlay['uid']
+            
+            draw_ccf_units(fig, x, y, z, aoi, uid)
+        
+    fig.update_layout(width=800 if if_flip else 1000, 
+                      height= 1000,
+                      xaxis_range=[0, 5700 if if_flip else 5700*2],
+                      yaxis_range=[8000, 0],
+                      xaxis_title='ccf_z (left -> right)',
+                      yaxis_title='ccf_y (superior -> inferior)',
+                      )
+    
+    
+    # st.plotly_chart(fig, use_container_width=True)
+    # st.pyplot(fig)
+    return fig
+
+
+
+# @st.experimental_memo(ttl=24*3600, experimental_allow_widgets=True, show_spinner=False)
+def plot_saggital_slice_unit(ccf_z, saggital_slice_thickness, if_flip, *args):
+
+    # -- ccf annotation --
+    saggital_slice, saggital_slice_name, saggital_edges = get_slice('saggital', ccf_z)
+
+    message = [f'ML ~ {ccf_z_to_ML(ccf_z)} mm', 
+               f'Slice thickness = {saggital_slice_thickness} um'],
+    fig = draw_ccf_annotations(saggital_slice, saggital_slice_name,
+                               saggital_edges, message)
+
     # -- overlayed units --
     if len(aggrid_outputs['data']):
         aggrid_outputs['data']['ccf_z_in_slice_plot'] = aggrid_outputs['data']['ccf_z']
@@ -370,47 +358,21 @@ def plot_saggital_slice_unit(ccf_z, slice_thickness, if_flip, *args):
             to_flip_value = aggrid_outputs['data']['ccf_z_in_slice_plot'][to_flip_idx]
             aggrid_outputs['data'].loc[to_flip_idx, 'ccf_z_in_slice_plot'] = 2 * 5700 - to_flip_value
             
-        units_to_overlay = aggrid_outputs['data'].query(f'{ccf_z - slice_thickness/2} < ccf_z_in_slice_plot and ccf_z_in_slice_plot <= {ccf_z + slice_thickness/2}')
+        units_to_overlay = aggrid_outputs['data'].query(f'{ccf_z - saggital_slice_thickness/2} < ccf_z_in_slice_plot and ccf_z_in_slice_plot <= {ccf_z + saggital_slice_thickness/2}')
+    
+    if len(units_to_overlay):
         x = units_to_overlay['ccf_x']
         y = units_to_overlay['ccf_y']
+        z = units_to_overlay[size_to_map]
         
         if if_ccf_plot_heatmap:
-            tuning_strength_2d = scipy.stats.binned_statistic_2d(x=x, y=y,
-                                            values=units_to_overlay[size_to_map], 
-                                            statistic=heatmap_aggr_func[0], 
-                                            bins=[np.arange(x.min(), x.max(), heatmap_bin_size),
-                                                  np.arange(y.min(), y.max(), heatmap_bin_size)])
-            
-            Z = _smooth_heatmap(tuning_strength_2d.statistic.T, sigma=heatmap_smooth)
-            
-            fig.add_trace(go.Heatmap(z=Z, 
-                                    x=tuning_strength_2d.x_edge, 
-                                    y=tuning_strength_2d.y_edge,
-                                    zmin=heatmap_color_range[0],
-                                    zmax=heatmap_color_range[1],
-                                    hoverinfo='skip',
-                                    hoverongaps=False,
-                                    #colorbar=dict(orientation="h", len=1)
-                                    ))
+            draw_ccf_heatmap(fig, x, y, z, saggital_slice_name)
         
-        if if_ccf_plot_scatter:
-            x = x + np.random.random(x.shape) * 30        
-            fig.add_trace(go.Scatter(x=x, 
-                                    y=y,
-                                    mode = 'markers',
-                                    marker_size = _size_mapping(units_to_overlay[size_to_map]),
-                                    marker_color = 'black',
-                                    hovertemplate= '"%{customdata[0]}"' + 
-                                                    '<br>%{text}' +
-                                                    '<br>%s = %%{customdata[1]}' % (size_to_map) +
-                                                    '<br>uid = %{customdata[2]}' +
-                                                    '<extra></extra>',
-                                    text=units_to_overlay['annotation'],
-                                    customdata=np.stack((units_to_overlay['area_of_interest'], 
-                                                        units_to_overlay[size_to_map],
-                                                        units_to_overlay['uid']), axis=-1),
-                                    showlegend=False
-                                    ))
+        if if_ccf_plot_scatter: 
+            aoi = units_to_overlay['area_of_interest']
+            uid = units_to_overlay['uid']
+            
+            draw_ccf_units(fig, x, y, z, aoi, uid)
     
     fig.update_layout(width=1600, 
                       height=1000,
@@ -436,30 +398,9 @@ def ccf_z_to_ML(ccf_z):
 
 unit_stats_names = [keys for keys in df['ephys_units'].keys() if any([s in keys for s in ['dQ', 'sumQ', 'rpe', 'ccf']])]
 
-# ------- Layout starts here -------- #
 
-# st.markdown('## Foraging sessions')
-# always_refetch = st.checkbox('Always refetch', value=False)
-# ephys_only = st.checkbox('Ephys only', value=True)
 
-# col1, col2 = st.columns([1, 1.5], gap='small')
-# with col1:
-#     if ephys_only:
-#         selection = aggrid_interactive_table_session(df=df['sessions'].query('ephys_ins > 0'))
-#     else:
-#         selection = aggrid_interactive_table_session(df=df['sessions'])
-#         # selection_units = aggrid_interactive_table(df=df['ephys_units'])
-
-# with col2:
-#     if selection["selected_rows"]:
-#         # st.write("You selected:")
-#         # st.json(selection["selected_rows"])
-#         fig = get_fig(selection["selected_rows"])
-        
-#         # fig_html = mpld3.fig_to_html(fig)
-#         # components.html(fig_html, height=600)
-#         st.write(fig)
-        
+# ------- Layout starts here -------- #    
 
 st.markdown('## Unit browser')
 st.write('(data fetched from S3)' if use_s3 else '(data fetched from local)')
