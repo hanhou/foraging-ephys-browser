@@ -346,7 +346,7 @@ def plot_saggital_slice_unit(ccf_z, saggital_slice_thickness, if_flip, *args):
     saggital_slice, saggital_slice_name, saggital_edges = get_slice('saggital', ccf_z)
 
     message = [f'ML ~ {ccf_z_to_ML(ccf_z)} mm', 
-               f'Slice thickness = {saggital_slice_thickness} um'],
+               f'Slice thickness = {saggital_slice_thickness} um']
     fig = draw_ccf_annotations(saggital_slice, saggital_slice_name,
                                saggital_edges, message)
 
