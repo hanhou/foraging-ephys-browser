@@ -14,6 +14,7 @@ from PIL import Image, ImageColor
 import streamlit.components.v1 as components
 from streamlit_plotly_events import plotly_events
 import streamlit_nested_layout
+import scipy
 
 import plotly.express as px
 import plotly.graph_objects as go
@@ -178,7 +179,29 @@ def _size_mapping(x):
     min_x, max_x = _get_min_max()
     return size_range[0] + x_gamma / (max_x - min_x) * (size_range[1] - size_range[0])
 
-@st.experimental_memo(ttl=24*3600, experimental_allow_widgets=True, show_spinner=False)
+def _smooth_heatmap(data, sigma):
+    '''https://stackoverflow.com/questions/18697532/gaussian-filtering-a-image-with-nan-in-python/36307291#36307291'''
+    
+    U = data.copy()
+    V=U.copy()
+    V[np.isnan(U)]=0
+    VV=scipy.ndimage.gaussian_filter(V,sigma=sigma)
+
+    W=0*U.copy()+1
+    W[np.isnan(U)]=0
+    WW=scipy.ndimage.gaussian_filter(W,sigma=sigma)
+
+    np.seterr(divide='ignore', invalid='ignore')
+
+    Z=VV/WW
+    
+    for i in range(len(Z)):
+        for j in range(len(Z[0])):
+            if np.isnan(U[i][j]):
+                Z[i][j] = np.nan
+    return Z
+
+# @st.experimental_memo(ttl=24*3600, experimental_allow_widgets=True, show_spinner=False)
 def plot_coronal_slice_unit(ccf_x, slice_thickness, if_flip, *args):
 
     # -- ccf annotation --
@@ -234,40 +257,65 @@ def plot_coronal_slice_unit(ccf_x, slice_thickness, if_flip, *args):
     if len(aggrid_outputs['data']):
         units_to_overlay = aggrid_outputs['data'].query(f'{ccf_x - slice_thickness/2} < ccf_x and ccf_x <= {ccf_x + slice_thickness/2}')
         
-        x = units_to_overlay['ccf_z'] + np.random.random(units_to_overlay['ccf_z'].shape) * 30
+        x = units_to_overlay['ccf_z']
+        y = units_to_overlay['ccf_y']
         if if_flip:
             x[x > 5700] = 5700 * 2 - x[x > 5700]
+            
+        if if_ccf_plot_heatmap:
+            tuning_strength_2d = scipy.stats.binned_statistic_2d(x=x, y=y, 
+                                            values=units_to_overlay[size_to_map], 
+                                            statistic=heatmap_aggr_func[0], 
+                                            bins=[np.arange(x.min(), x.max(), heatmap_bin_size),
+                                                  np.arange(y.min(), y.max(), heatmap_bin_size)])
+            
+            Z = _smooth_heatmap(tuning_strength_2d.statistic.T, sigma=heatmap_smooth)
+            
+            fig.add_trace(go.Heatmap(z=Z, 
+                                    x=tuning_strength_2d.x_edge, 
+                                    y=tuning_strength_2d.y_edge,
+                                    zmin=heatmap_color_range[0],
+                                    zmax=heatmap_color_range[1],
+                                    hoverinfo='skip',
+                                    #colorbar=dict(orientation="h", len=1)
+                                    ))
+    
         
-        fig.add_trace(go.Scatter(x=x, 
-                                 y=units_to_overlay['ccf_y'],
-                                 mode = 'markers',
-                                 marker_size = _size_mapping(units_to_overlay[size_to_map]),
-                                 marker_color = 'black',
-                                 hovertemplate= '"%{customdata[0]}"' + 
-                                                '<br>%{text}' +
-                                                '<br>%s = %%{customdata[1]}' % (size_to_map) +
-                                                '<br>uid = %{customdata[2]}' +
-                                                '<extra></extra>',
-                                 text=units_to_overlay['annotation'],
-                                 customdata=np.stack((units_to_overlay['area_of_interest'], 
-                                                      units_to_overlay[size_to_map], 
-                                                      units_to_overlay['uid']),
-                                                      axis=-1),
-                                 showlegend=False
-                                ))
+        if if_ccf_plot_scatter:
+            x = x + np.random.random(x.shape) * 30
+
+            fig.add_trace(go.Scatter(x=x, 
+                                    y=y,
+                                    mode = 'markers',
+                                    marker_size = _size_mapping(units_to_overlay[size_to_map]),
+                                    marker_color = 'black',
+                                    hovertemplate= '"%{customdata[0]}"' + 
+                                                    '<br>%{text}' +
+                                                    '<br>%s = %%{customdata[1]}' % (size_to_map) +
+                                                    '<br>uid = %{customdata[2]}' +
+                                                    '<extra></extra>',
+                                    text=units_to_overlay['annotation'],
+                                    customdata=np.stack((units_to_overlay['area_of_interest'], 
+                                                        units_to_overlay[size_to_map], 
+                                                        units_to_overlay['uid']),
+                                                        axis=-1),
+                                    showlegend=False
+                                    ))
         
-    fig.update_layout(width=800 if if_flip else 1000, 
+    fig.update_layout(width=700 if if_flip else 1000, 
                       height= 1000,
                       xaxis_range=[0, 5700 if if_flip else 5700*2],
                       yaxis_range=[8000, 0],
                       xaxis_title='ccf_z (left -> right)',
-                      yaxis_title='ccf_y (superior -> inferior)')
+                      yaxis_title='ccf_y (superior -> inferior)',
+                      )
+    
     
     # st.plotly_chart(fig, use_container_width=True)
     # st.pyplot(fig)
     return fig
 
-@st.experimental_memo(ttl=24*3600, experimental_allow_widgets=True, show_spinner=False)
+# @st.experimental_memo(ttl=24*3600, experimental_allow_widgets=True, show_spinner=False)
 def plot_saggital_slice_unit(ccf_z, slice_thickness, if_flip, *args):
 
     # -- ccf annotation --
@@ -323,29 +371,48 @@ def plot_saggital_slice_unit(ccf_z, slice_thickness, if_flip, *args):
             aggrid_outputs['data'].loc[to_flip_idx, 'ccf_z_in_slice_plot'] = 2 * 5700 - to_flip_value
             
         units_to_overlay = aggrid_outputs['data'].query(f'{ccf_z - slice_thickness/2} < ccf_z_in_slice_plot and ccf_z_in_slice_plot <= {ccf_z + slice_thickness/2}')
+        x = units_to_overlay['ccf_x']
+        y = units_to_overlay['ccf_y']
         
-        x = units_to_overlay['ccf_x'] + np.random.random(units_to_overlay['ccf_x'].shape) * 30
-        # if if_flip:
-        #     x[x > 5700] = 5700 * 2 - x[x > 5700]
+        if if_ccf_plot_heatmap:
+            tuning_strength_2d = scipy.stats.binned_statistic_2d(x=x, y=y,
+                                            values=units_to_overlay[size_to_map], 
+                                            statistic=heatmap_aggr_func[0], 
+                                            bins=[np.arange(x.min(), x.max(), heatmap_bin_size),
+                                                  np.arange(y.min(), y.max(), heatmap_bin_size)])
+            
+            Z = _smooth_heatmap(tuning_strength_2d.statistic.T, sigma=heatmap_smooth)
+            
+            fig.add_trace(go.Heatmap(z=Z, 
+                                    x=tuning_strength_2d.x_edge, 
+                                    y=tuning_strength_2d.y_edge,
+                                    zmin=heatmap_color_range[0],
+                                    zmax=heatmap_color_range[1],
+                                    hoverinfo='skip',
+                                    hoverongaps=False,
+                                    #colorbar=dict(orientation="h", len=1)
+                                    ))
         
-        fig.add_trace(go.Scatter(x=x, 
-                                 y=units_to_overlay['ccf_y'],
-                                 mode = 'markers',
-                                 marker_size = _size_mapping(units_to_overlay[size_to_map]),
-                                 marker_color = 'black',
-                                 hovertemplate= '"%{customdata[0]}"' + 
-                                                '<br>%{text}' +
-                                                '<br>%s = %%{customdata[1]}' % (size_to_map) +
-                                                '<br>uid = %{customdata[2]}' +
-                                                '<extra></extra>',
-                                 text=units_to_overlay['annotation'],
-                                 customdata=np.stack((units_to_overlay['area_of_interest'], 
-                                                      units_to_overlay[size_to_map],
-                                                      units_to_overlay['uid']), axis=-1),
-                                 showlegend=False
-                                ))
+        if if_ccf_plot_scatter:
+            x = x + np.random.random(x.shape) * 30        
+            fig.add_trace(go.Scatter(x=x, 
+                                    y=y,
+                                    mode = 'markers',
+                                    marker_size = _size_mapping(units_to_overlay[size_to_map]),
+                                    marker_color = 'black',
+                                    hovertemplate= '"%{customdata[0]}"' + 
+                                                    '<br>%{text}' +
+                                                    '<br>%s = %%{customdata[1]}' % (size_to_map) +
+                                                    '<br>uid = %{customdata[2]}' +
+                                                    '<extra></extra>',
+                                    text=units_to_overlay['annotation'],
+                                    customdata=np.stack((units_to_overlay['area_of_interest'], 
+                                                        units_to_overlay[size_to_map],
+                                                        units_to_overlay['uid']), axis=-1),
+                                    showlegend=False
+                                    ))
     
-    fig.update_layout(width=1700, 
+    fig.update_layout(width=1600, 
                       height=1000,
                       xaxis_range=[0, 13200],
                       yaxis_range=[8000, 0],
@@ -400,11 +467,30 @@ st.write('(data fetched from S3)' if use_s3 else '(data fetched from local)')
 with st.sidebar:
     with st.expander("CCF plot settings", expanded=True):
         if_flip = st.checkbox("Flip to left hemisphere", value=True)
-        size_to_map = st.selectbox("Map to size", [n for n in unit_stats_names if 'ccf' not in n and 'abs' in n], index=0)
+        
+        if_ccf_plot_scatter = st.checkbox("Add units", value=True)
+        size_to_map = st.selectbox("Size mapping", [n for n in unit_stats_names if 'ccf' not in n and 'abs' in n], index=0)
+        size_range = st.slider("size_range", 0, 50, (0, 10))
         size_gamma = st.slider("gamma", min_value=0.0, max_value=2.0, value=1.0, step=0.1)
-        size_range = st.slider("size_range", 0, 50, (0, 20))
-    
+        
+        if_ccf_plot_heatmap = st.checkbox("Add heatmap", value=True)
+        heatmap_aggr = st.selectbox("Heatmap mapping", [r'% significant', 'median t-stat', 'mean t-stat', 'number of units'], index=0)
+        
+        sign_level = st.number_input("significant level: t >= ", value=2, disabled=heatmap_aggr != '% significant')
 
+        heatmap_aggr_func = {'median t-stat': ('median', 0.0, 15.0, 1.0, (2.0, 5.0)),  # func, min, max, step, default
+                             'mean t-stat': ('mean', 0.0, 15.0, 1.0, (2.0, 5.0)),
+                             r'% significant': (lambda x: sum(x >= sign_level) / len(x) * 100, 5, 100, 5, (30, 80)),
+                             'number of units': (lambda x: len(x) if len(x) else np.nan, 0, 50, 5, (0, 20)),
+                             }[heatmap_aggr]
+                
+        heatmap_color_range = st.slider(f"Heatmap color range ({heatmap_aggr})", heatmap_aggr_func[1], heatmap_aggr_func[2], step=heatmap_aggr_func[3], value=heatmap_aggr_func[4])
+        
+        heatmap_bin_size = st.slider("Heatmap bin size", 25, 500, step=25, value=150)
+        heatmap_smooth = st.slider("Heatmap smooth factor", 0.0, 2.0, step=0.1, value=1.0)
+        
+
+        
 with st.container():
     col1, col2 = st.columns([1.5, 1], gap='small')
     with col1:
@@ -429,18 +515,18 @@ with st.container():
 
 with st.container():
     # --- coronal slice ---
-    col_coronal, col_saggital = st.columns((1, 2))
+    col_coronal, col_saggital = st.columns((1, 1.9))
     with col_coronal:
-        ccf_z = st.slider("Saggital slice at (ccf_z)", min_value=600, max_value=5700 if if_flip else 10800, value=4000, step=100) # whole ccf @ 25um [528x320x456] 
-        saggital_thickness = st.slider("Slice thickness (LR)", min_value= 100, max_value=5000, step=50, value=200)
+        ccf_z = st.slider("Saggital slice at (ccf_z)", min_value=600, max_value=5700 if if_flip else 10800, value=5100, step=100) # whole ccf @ 25um [528x320x456] 
+        saggital_thickness = st.slider("Slice thickness (LR)", min_value= 100, max_value=5000, step=50, value=700)
         
         container_coronal = st.container()
         
     # --- saggital slice ---
     with col_saggital:
-        ccf_x = st.slider("Coronal slice at (ccf_x)", min_value=0, max_value=13100, value=5000, step=100) # whole ccf @ 25um [528x320x456] 
+        ccf_x = st.slider("Coronal slice at (ccf_x)", min_value=0, max_value=13100, value=3500, step=100) # whole ccf @ 25um [528x320x456] 
         # st.markdown(f'##### AP relative to Bregma ~ {ccf_x_to_AP(ccf_x): .2f} mm') 
-        coronal_thickness = st.slider("Slice thickness (AP)", min_value= 100, max_value=5000, step=50, value=200)
+        coronal_thickness = st.slider("Slice thickness (AP)", min_value= 100, max_value=5000, step=50, value=700)
         
         container_saggital = st.container()
 
