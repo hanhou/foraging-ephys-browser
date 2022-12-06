@@ -316,13 +316,18 @@ def plot_coronal_slice_unit(ccf_x, coronal_slice_thickness, if_flip, *args):
             x[x > 5700] = 5700 * 2 - x[x > 5700]
             
         if if_ccf_plot_heatmap:
-            draw_ccf_heatmap(fig, x, y, z, coronal_slice_name)
+            try:
+                draw_ccf_heatmap(fig, x, y, z, coronal_slice_name)
+            except:
+                pass
         
         if if_ccf_plot_scatter:
             aoi = units_to_overlay['area_of_interest']
             uid = units_to_overlay['uid']
-            
-            draw_ccf_units(fig, x, y, z, aoi, uid)
+            try:
+                draw_ccf_units(fig, x, y, z, aoi, uid)
+            except:
+                pass
         
     fig.update_layout(width=800 if if_flip else 1000, 
                       height= 1000,
