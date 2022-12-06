@@ -302,7 +302,7 @@ def plot_coronal_slice_unit(ccf_x, slice_thickness, if_flip, *args):
                                     showlegend=False
                                     ))
         
-    fig.update_layout(width=700 if if_flip else 1000, 
+    fig.update_layout(width=800 if if_flip else 1000, 
                       height= 1000,
                       xaxis_range=[0, 5700 if if_flip else 5700*2],
                       yaxis_range=[8000, 0],
@@ -465,30 +465,33 @@ st.markdown('## Unit browser')
 st.write('(data fetched from S3)' if use_s3 else '(data fetched from local)')
 
 with st.sidebar:
-    with st.expander("CCF plot settings", expanded=True):
+    with st.expander("CCF view settings", expanded=True):
+        size_to_map = st.selectbox("What to plot?", [n for n in unit_stats_names if 'ccf' not in n and 'abs' in n], index=0)
+        
         if_flip = st.checkbox("Flip to left hemisphere", value=True)
         
         if_ccf_plot_scatter = st.checkbox("Add units", value=True)
-        size_to_map = st.selectbox("Size mapping", [n for n in unit_stats_names if 'ccf' not in n and 'abs' in n], index=0)
-        size_range = st.slider("size_range", 0, 50, (0, 10))
-        size_gamma = st.slider("gamma", min_value=0.0, max_value=2.0, value=1.0, step=0.1)
+        with st.expander("Unit settings", expanded=True):
+            size_range = st.slider("size_range", 0, 50, (0, 10))
+            size_gamma = st.slider("gamma", min_value=0.0, max_value=2.0, value=1.0, step=0.1)
         
         if_ccf_plot_heatmap = st.checkbox("Add heatmap", value=True)
-        heatmap_aggr = st.selectbox("Heatmap mapping", [r'% significant', 'median t-stat', 'mean t-stat', 'number of units'], index=0)
-        
-        sign_level = st.number_input("significant level: t >= ", value=2, disabled=heatmap_aggr != '% significant')
+        with st.expander("Heatmap settings", expanded=True):
+            heatmap_aggr = st.selectbox("Turn which to heatmap?", [r'% significant units', 'median t-stat', 'mean t-stat', 'number of units'], index=0)
+            
+            sign_level = st.number_input("significant level: t >= ", value=2, disabled=heatmap_aggr != '% significant units')
 
-        heatmap_aggr_func = {'median t-stat': ('median', 0.0, 15.0, 1.0, (2.0, 5.0)),  # func, min, max, step, default
-                             'mean t-stat': ('mean', 0.0, 15.0, 1.0, (2.0, 5.0)),
-                             r'% significant': (lambda x: sum(x >= sign_level) / len(x) * 100, 5, 100, 5, (30, 80)),
-                             'number of units': (lambda x: len(x) if len(x) else np.nan, 0, 50, 5, (0, 20)),
-                             }[heatmap_aggr]
-                
-        heatmap_color_range = st.slider(f"Heatmap color range ({heatmap_aggr})", heatmap_aggr_func[1], heatmap_aggr_func[2], step=heatmap_aggr_func[3], value=heatmap_aggr_func[4])
-        
-        heatmap_bin_size = st.slider("Heatmap bin size", 25, 500, step=25, value=150)
-        heatmap_smooth = st.slider("Heatmap smooth factor", 0.0, 2.0, step=0.1, value=1.0)
-        
+            heatmap_aggr_func = {'median t-stat': ('median', 0.0, 15.0, 1.0, (2.0, 5.0)),  # func, min, max, step, default
+                                'mean t-stat': ('mean', 0.0, 15.0, 1.0, (2.0, 5.0)),
+                                r'% significant units': (lambda x: sum(x >= sign_level) / len(x) * 100, 5, 100, 5, (30, 80)),
+                                'number of units': (lambda x: len(x) if len(x) else np.nan, 0, 50, 5, (0, 20)),
+                                }[heatmap_aggr]
+                    
+            heatmap_color_range = st.slider(f"Heatmap color range ({heatmap_aggr})", heatmap_aggr_func[1], heatmap_aggr_func[2], step=heatmap_aggr_func[3], value=heatmap_aggr_func[4])
+            
+            heatmap_bin_size = st.slider("Heatmap bin size", 25, 500, step=25, value=150)
+            heatmap_smooth = st.slider("Heatmap smooth factor", 0.0, 2.0, step=0.1, value=1.0)
+            
 
         
 with st.container():
@@ -515,7 +518,7 @@ with st.container():
 
 with st.container():
     # --- coronal slice ---
-    col_coronal, col_saggital = st.columns((1, 1.9))
+    col_coronal, col_saggital = st.columns((1, 1.8))
     with col_coronal:
         ccf_z = st.slider("Saggital slice at (ccf_z)", min_value=600, max_value=5700 if if_flip else 10800, value=5100, step=100) # whole ccf @ 25um [528x320x456] 
         saggital_thickness = st.slider("Slice thickness (LR)", min_value= 100, max_value=5000, step=50, value=700)
