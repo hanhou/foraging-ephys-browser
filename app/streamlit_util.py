@@ -5,7 +5,7 @@ from st_aggrid import AgGrid, GridOptionsBuilder
 from st_aggrid.shared import GridUpdateMode, ColumnsAutoSizeMode, DataReturnMode
 
 custom_css = {
-".ag-root.ag-unselectable.ag-layout-normal": {"font-size": "10px !important",
+".ag-root.ag-unselectable.ag-layout-normal": {"font-size": "15px !important",
 "font-family": "Roboto, sans-serif !important;"},
 ".ag-header-cell-text": {"color": "#495057 !important;"},
 ".ag-theme-alpine .ag-ltr .ag-cell": {"color": "#444 !important;"},
@@ -78,6 +78,10 @@ def aggrid_interactive_table_units(df: pd.DataFrame):
     options.configure_selection(selection_mode="multiple", use_checkbox=False, header_checkbox=True)
     options.configure_side_bar()
     options.configure_selection("single")
+    options.configure_columns(column_names=['subject_id', 'electrode'], hide=True)
+ 
+
+
      
     # options.configure_column(field="water_restriction_number", header_name="subject", 
     #                          children=[dict(field="water_restriction_number", rowGroup=True),
