@@ -242,8 +242,8 @@ def draw_ccf_heatmap(fig, x, y, z, slice_name):
     heatmap = scipy.stats.binned_statistic_2d(x=x, y=y,
                                 values=z, 
                                 statistic=heatmap_aggr_func[0], 
-                                bins=[np.arange(x.min(), x.max(), heatmap_bin_size),
-                                        np.arange(y.min(), y.max(), heatmap_bin_size)])
+                                bins=[np.arange(x.min() - heatmap_bin_size, x.max() + heatmap_bin_size, heatmap_bin_size),
+                                      np.arange(y.min() - heatmap_bin_size, y.max() + heatmap_bin_size, heatmap_bin_size)])
     
     heatmap_smoothed = _smooth_heatmap(heatmap.statistic, sigma=heatmap_smooth)
     
