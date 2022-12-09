@@ -181,7 +181,7 @@ def get_slice(direction, ccf_x):
 
 @st.experimental_memo(ttl=24*3600)
 def _get_min_max():
-    x_gamma_all = np.abs(df['ephys_units'][size_to_map] ** size_gamma)
+    x_gamma_all = np.abs(df['ephys_units'][value_to_map] ** size_gamma)
     return np.percentile(x_gamma_all, 5), np.percentile(x_gamma_all, 95)
 
 def _size_mapping(x):
@@ -211,7 +211,7 @@ def _smooth_heatmap(data, sigma):
                 Z[i][j] = np.nan
     return Z
 
-@st.experimental_memo(ttl=24*3600, experimental_allow_widgets=True, show_spinner=True)
+# @st.experimental_memo(ttl=24*3600, experimental_allow_widgets=True, show_spinner=True)
 def draw_ccf_annotations(fig, slice, slice_name, edges, message):
     img_str = image_array_to_data_uri(
             slice.astype(np.uint8),
@@ -275,7 +275,7 @@ def draw_ccf_heatmap(fig, x, y, z, slice_name):
                             zmax=zmax,
                             hoverongaps=False,
                             hovertemplate = "%{customdata[0]}" + 
-                                            "<br>%s (%s): %%{z}" % (heatmap_aggr_name, heatmap_to_map) + 
+                                            "<br>%s (%s): %%{z}" % (heatmap_aggr_name, value_to_map) + 
                                             "<extra></extra>",
                             customdata=heatmap_region.T,
                             colorscale='RdBu' if if_bi_directional_heatmap else None, 
@@ -295,7 +295,7 @@ def draw_ccf_units(fig, x, y, z, aoi, uid, annot):
                                 marker = {'color': 'rgba(0, 0, 0, 0.8)'},
                                 hovertemplate= '"%{customdata[0]}"' + 
                                                 '<br>%{text}' +
-                                                '<br>%s = %%{customdata[1]}' % (size_to_map) +
+                                                '<br>%s = %%{customdata[1]}' % value_to_map +
                                                 '<br>uid = %{customdata[2]}' +
                                                 '<extra></extra>',
                                 text=annot,
@@ -312,7 +312,7 @@ def draw_ccf_units(fig, x, y, z, aoi, uid, annot):
                                     marker = {'color': col},
                                     hovertemplate= '"%{customdata[0]}"' + 
                                                     '<br>%{text}' +
-                                                    '<br>%s = %%{customdata[1]}' % (size_to_map) +
+                                                    '<br>%s = %%{customdata[1]}' % value_to_map +
                                                     '<br>uid = %{customdata[2]}' +
                                                     '<extra></extra>',
                                     text=annot[select_z],
@@ -347,13 +347,17 @@ def plot_coronal_slice_unit(ccf_x, coronal_slice_thickness, if_flip, *args):
     
         x = units_to_overlay['ccf_z']
         y = units_to_overlay['ccf_y']
+        z = units_to_overlay[value_to_map]
+        
+        if if_take_abs:
+            z = np.abs(z)
 
         if if_flip:
             x[x > 5700] = 5700 * 2 - x[x > 5700]
             
         if if_ccf_plot_heatmap:
             try:
-                draw_ccf_heatmap(fig, x, y, units_to_overlay[heatmap_to_map], coronal_slice_name)
+                draw_ccf_heatmap(fig, x, y, z, coronal_slice_name)
             except:
                 pass
         
@@ -362,7 +366,7 @@ def plot_coronal_slice_unit(ccf_x, coronal_slice_thickness, if_flip, *args):
             uid = units_to_overlay['uid']
             annot = units_to_overlay['annotation']
             try:
-                draw_ccf_units(fig, x, y, units_to_overlay[size_to_map], aoi, uid, annot)
+                draw_ccf_units(fig, x, y, z, aoi, uid, annot)
             except:
                 pass
         
@@ -405,16 +409,20 @@ def plot_saggital_slice_unit(ccf_z, saggital_slice_thickness, if_flip, *args):
     if len(units_to_overlay):
         x = units_to_overlay['ccf_x']
         y = units_to_overlay['ccf_y']
-        
+        z = units_to_overlay[value_to_map]
+
+        if if_take_abs:
+            z = np.abs(z)
+
         if if_ccf_plot_heatmap:
-            draw_ccf_heatmap(fig, x, y, units_to_overlay[heatmap_to_map], saggital_slice_name)
+            draw_ccf_heatmap(fig, x, y, z, saggital_slice_name)
         
         if if_ccf_plot_scatter: 
             aoi = units_to_overlay['area_of_interest']
             annot = units_to_overlay['annotation']
             uid = units_to_overlay['uid']
             
-            draw_ccf_units(fig, x, y, units_to_overlay[size_to_map], aoi, uid, annot)
+            draw_ccf_units(fig, x, y, z, aoi, uid, annot)
     
     fig.update_layout(width=1300, 
                       height=1000,
@@ -442,7 +450,8 @@ scatter_stats_names = [keys for keys in df['ephys_units'].keys() if any([s in ke
 ccf_stat_names = [n for n in scatter_stats_names if 'ccf' not in n]
 
 def _ccf_heatmap_available_aggr_funcs(heatmap_to_map):
-    return ([r'% significant units'] if 'avg_firing_rate' not in heatmap_to_map else []) + ['median', 'median (significant only)', 'mean', 'mean (significant only)', 'number of units']
+    return ([r'% significant units'] if all(s not in heatmap_to_map for s in ['avg_firing_rate', 'beta']) 
+            else []) + ['median', 'median (significant only)', 'mean', 'mean (significant only)', 'number of units']
 
 def _ccf_heatmap_get_aggr_func(heatmap_aggr_name, heatmap_to_map):
     heatmap_aggr_func_mapping = {    # func, (min, max, step, default)
@@ -468,7 +477,8 @@ with st.sidebar:
     with st.expander("CCF view settings", expanded=True):
         
         if_flip = st.checkbox("Flip to left hemisphere", value=True)
-        size_to_map = st.selectbox("Plot which?", ccf_stat_names, index=ccf_stat_names.index('dQ_iti'))
+        value_to_map = st.selectbox("Plot which?", ccf_stat_names, index=ccf_stat_names.index('t_dQ_iti'))
+        if_take_abs = st.checkbox("Use abs()?", value=False)
         
         if_ccf_plot_scatter = st.checkbox("Draw units", value=True)        
         with st.expander("Unit settings", expanded=True):
@@ -477,11 +487,10 @@ with st.sidebar:
         
         if_ccf_plot_heatmap = st.checkbox("Draw heatmap", value=True)
         with st.expander("Heatmap settings", expanded=True):
-            heatmap_to_map = size_to_map # st.selectbox("Map which to heatmap?", ccf_stat_names, index=ccf_stat_names.index('dQ_iti_abs'))            
-            heatmap_aggr_name = st.selectbox("aggregate function", _ccf_heatmap_available_aggr_funcs(heatmap_to_map), index=0)
+            heatmap_aggr_name = st.selectbox("aggregate function", _ccf_heatmap_available_aggr_funcs(value_to_map), index=0)
                         
-            if_bi_directional_heatmap = not any(s in heatmap_to_map for s in ['rate', 'abs']) and 'units' not in heatmap_aggr_name  # number_or_units or % sign_units
-            heatmap_aggr_func, heatmap_color_ranges = _ccf_heatmap_get_aggr_func(heatmap_aggr_name, heatmap_to_map)
+            if_bi_directional_heatmap = not (if_take_abs or any(s in value_to_map for s in ['rate']) or '%' in heatmap_aggr_name) # number_or_units or % sign_units
+            heatmap_aggr_func, heatmap_color_ranges = _ccf_heatmap_get_aggr_func(heatmap_aggr_name, value_to_map)
             
             sign_level = st.number_input("significant level: t >= ", value=2, disabled='significant' not in heatmap_aggr_name)
 
@@ -506,9 +515,9 @@ with st.container():
                 with st.form("axis_selection"):
                     col3, col4 = st.columns([1, 1])
                     with col3:
-                        x_name = st.selectbox("x axis", scatter_stats_names, index=scatter_stats_names.index('dQ_iti'))
+                        x_name = st.selectbox("x axis", scatter_stats_names, index=scatter_stats_names.index('t_dQ_iti'))
                     with col4:
-                        y_name = st.selectbox("y axis", scatter_stats_names, index=scatter_stats_names.index('sumQ_iti'))
+                        y_name = st.selectbox("y axis", scatter_stats_names, index=scatter_stats_names.index('t_sumQ_iti'))
                     st.form_submit_button("update axes")
         
     with col2:
