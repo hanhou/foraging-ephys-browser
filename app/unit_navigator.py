@@ -468,16 +468,16 @@ with st.sidebar:
     with st.expander("CCF view settings", expanded=True):
         
         if_flip = st.checkbox("Flip to left hemisphere", value=True)
+        size_to_map = st.selectbox("Plot which?", ccf_stat_names, index=ccf_stat_names.index('dQ_iti'))
         
-        if_ccf_plot_scatter = st.checkbox("Draw units", value=True)
+        if_ccf_plot_scatter = st.checkbox("Draw units", value=True)        
         with st.expander("Unit settings", expanded=True):
-            size_to_map = st.selectbox("Map which to size?", ccf_stat_names, index=ccf_stat_names.index('dQ_iti_abs'))
             size_range = st.slider("size range", 0, 50, (0, 10))
             size_gamma = st.slider("gamma", min_value=0.0, max_value=2.0, value=1.0, step=0.1)
         
         if_ccf_plot_heatmap = st.checkbox("Draw heatmap", value=True)
         with st.expander("Heatmap settings", expanded=True):
-            heatmap_to_map = st.selectbox("Map which to heatmap?", ccf_stat_names, index=ccf_stat_names.index('dQ_iti_abs'))            
+            heatmap_to_map = size_to_map # st.selectbox("Map which to heatmap?", ccf_stat_names, index=ccf_stat_names.index('dQ_iti_abs'))            
             heatmap_aggr_name = st.selectbox("aggregate function", _ccf_heatmap_available_aggr_funcs(heatmap_to_map), index=0)
                         
             if_bi_directional_heatmap = not any(s in heatmap_to_map for s in ['rate', 'abs']) and 'units' not in heatmap_aggr_name  # number_or_units or % sign_units
