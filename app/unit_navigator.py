@@ -21,6 +21,14 @@ import plotly.graph_objects as go
 from plotly.utils import image_array_to_data_uri
 
 
+if_profile = False
+
+if if_profile:
+    from streamlit_profiler import Profiler
+    p = Profiler()
+    p.start()
+
+
 from streamlit_util import *
 # from pipeline import experiment, ephys, lab, psth_foraging, report, foraging_analysis
 # from pipeline.plot import foraging_model_plot
@@ -86,6 +94,8 @@ def load_data(tables=['sessions']):
     
 
 df = load_data(['sessions', 'ephys_units'])
+
+
 
 @st.experimental_memo(ttl=24*3600)
 def get_fig(key):
@@ -201,7 +211,8 @@ def _smooth_heatmap(data, sigma):
                 Z[i][j] = np.nan
     return Z
 
-def draw_ccf_annotations(slice, slice_name, edges, message):
+@st.experimental_memo(ttl=24*3600, experimental_allow_widgets=True, show_spinner=True)
+def draw_ccf_annotations(fig, slice, slice_name, edges, message):
     img_str = image_array_to_data_uri(
             slice.astype(np.uint8),
             backend='auto',
@@ -216,7 +227,6 @@ def draw_ccf_annotations(slice, slice_name, edges, message):
     
     traces = go.Image(source=img_str, x0=0, y0=0, dx=CCF_RESOLUTION, dy=CCF_RESOLUTION,
                       hovertemplate=hovertemplate, customdata=slice_name)
-    fig = go.Figure()
     fig.add_trace(traces)
     fig.add_trace(go.Scatter(
         x=[300, 300],
@@ -314,6 +324,7 @@ def draw_ccf_units(fig, x, y, z, aoi, uid, annot):
 
 # @st.experimental_memo(ttl=24*3600, experimental_allow_widgets=True, show_spinner=True)
 def plot_coronal_slice_unit(ccf_x, coronal_slice_thickness, if_flip, *args):
+    fig = go.Figure()
 
     # -- ccf annotation --
     coronal_slice, coronal_slice_name, coronal_edges = get_slice('coronal', ccf_x)
@@ -326,7 +337,7 @@ def plot_coronal_slice_unit(ccf_x, coronal_slice_thickness, if_flip, *args):
         
     message = [f'AP ~ {ccf_x_to_AP(ccf_x)} mm', 
                f'Slice thickness = {coronal_slice_thickness} um']
-    fig = draw_ccf_annotations(coronal_slice, coronal_slice_name, 
+    fig = draw_ccf_annotations(fig, coronal_slice, coronal_slice_name, 
                                coronal_edges, message)
 
     # -- overlayed units --
@@ -370,13 +381,15 @@ def plot_coronal_slice_unit(ccf_x, coronal_slice_thickness, if_flip, *args):
 
 # @st.experimental_memo(ttl=24*3600, experimental_allow_widgets=True, show_spinner=True)
 def plot_saggital_slice_unit(ccf_z, saggital_slice_thickness, if_flip, *args):
+    fig = go.Figure()
 
     # -- ccf annotation --
     saggital_slice, saggital_slice_name, saggital_edges = get_slice('saggital', ccf_z)
 
     message = [f'ML ~ {ccf_z_to_ML(ccf_z)} mm', 
                f'Slice thickness = {saggital_slice_thickness} um']
-    fig = draw_ccf_annotations(saggital_slice, saggital_slice_name,
+
+    fig = draw_ccf_annotations(fig, saggital_slice, saggital_slice_name,
                                saggital_edges, message)
 
     # -- overlayed units --
@@ -405,7 +418,7 @@ def plot_saggital_slice_unit(ccf_z, saggital_slice_thickness, if_flip, *args):
     
     fig.update_layout(width=1300, 
                       height=1000,
-                      xaxis_range=[0, 12000],
+                      xaxis_range=[0, 10000],
                       yaxis_range=[8000, 0],
                       xaxis_title='ccf_x (anterior -> posterior)',
                       yaxis_title='ccf_y (superior -> inferior)',
@@ -425,7 +438,7 @@ def ccf_x_to_AP(ccf_x):
 def ccf_z_to_ML(ccf_z):
     return round(ccf_z- 5700)/1000
 
-scatter_stats_names = [keys for keys in df['ephys_units'].keys() if any([s in keys for s in ['dQ', 'sumQ', 'rpe', 'ccf', 'firing_rate']])]
+scatter_stats_names = [keys for keys in df['ephys_units'].keys() if any([s in keys for s in ['dQ', 'sumQ', 'contraQ', 'ipsiQ', 'rpe', 'ccf', 'firing_rate']])]
 ccf_stat_names = [n for n in scatter_stats_names if 'ccf' not in n]
 
 def _ccf_heatmap_available_aggr_funcs(heatmap_to_map):
@@ -572,3 +585,6 @@ with container_unit_all_in_one:
 if selected_points_scatter and selected_points_scatter != st.session_state.selected_points:
     st.session_state.selected_points = selected_points_scatter
     st.experimental_rerun()
+    
+if if_profile:    
+    p.stop()
