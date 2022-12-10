@@ -92,10 +92,9 @@ def load_data(tables=['sessions']):
         
     return df
     
-
-df = load_data(['sessions', 'ephys_units'])
-
-
+df = load_data(['sessions', 'ephys_units', 'aoi_color'])
+aoi_color_mapping = {area: f'rgb({",".join(col.astype(str))})' for area, col in zip(df['aoi_color'].index, df['aoi_color'].rgb)}
+aoi_color_mapping['others'] = 'rgb(0, 0, 0)'
 
 @st.experimental_memo(ttl=24*3600)
 def get_fig(key):
@@ -107,10 +106,11 @@ def get_fig(key):
 
 
 @st.experimental_memo(ttl=24*3600)
-def plot_scatter(data, x_name='dQ_iti', y_name='sumQ_iti'):
+def plot_scatter(data, x_name='dQ_iti', y_name='sumQ_iti', if_use_ccf_color=False):
     fig = px.scatter(data, x=x_name, y=y_name, 
                      color='area_of_interest', symbol="area_of_interest",
-                     hover_data=['annotation'])
+                     hover_data=['annotation'],
+                     color_discrete_map=aoi_color_mapping if if_use_ccf_color else None)
     
     fig.add_vline(x=2.0, line_width=1, line_dash="dash", line_color="black")
     fig.add_vline(x=-2.0, line_width=1, line_dash="dash", line_color="black")
@@ -122,14 +122,43 @@ def plot_scatter(data, x_name='dQ_iti', y_name='sumQ_iti'):
     # fig.update_xaxes(range=[-40, 40])
     # fig.update_yaxes(range=[-40, 40])
     
-    # fig.update_layout(width = 800, height = 800)
+    fig.update_layout(width = 800, height = 800)
     
-    if all(any([s in name for s in ['dQ', 'sumQ', 'rpe']]) for name in [x_name, y_name]):
+    if all(any([s in name for s in ['t_', 'beta_']]) for name in [x_name, y_name]):
         fig.update_yaxes(
             scaleanchor = "x",
             scaleratio = 1,
         )
             
+    return fig
+
+@st.experimental_memo(ttl=24*3600)        
+def plot_polar(df_unit_filtered, x_name, y_name, if_sign_only, if_weighted_by_r, n_bins):
+    df_to_polar_hist = df_unit_filtered.query(f'abs({x_name}) >= {sign_level} or abs({y_name}) >= {sign_level}') if if_sign_only else df_unit_filtered
+    polar_hist = df_to_polar_hist.groupby('area_of_interest'
+                                            ).apply(lambda x: np.histogram(**{**dict(a=_to_theta_r(x[x_name], x[y_name])[0], bins=bins),
+                                                                            **(dict(weights=_to_theta_r(x[x_name], x[y_name])[1])   # Weighted by r
+                                                                                if if_weighted_by_r else {}
+                                                                                )}
+                                                                            )[0]
+                                                    )
+                                            
+    bin_center = np.rad2deg(np.mean([bins[:-1], bins[1:]], axis=0)) 
+
+    fig = go.Figure()
+    for aoi, hist in polar_hist.items():
+        norm_hist = hist / np.sum(hist) 
+        fig.add_trace(go.Scatterpolar(r=np.hstack([norm_hist, norm_hist[0]]),
+                                        theta=np.hstack([bin_center, bin_center[0]]),
+                                        mode='lines',
+                                        name=aoi,
+                                        marker_color=aoi_color_mapping[aoi], 
+                    )
+                    #   color_discrete_sequence=px.colors.sequential.Plasma_r,
+                    #   template="plotly_dark",
+                    )
+        
+    fig.update_layout(height=800, width=800)
     return fig
 
 @st.experimental_memo(ttl=24*3600)
@@ -211,6 +240,10 @@ def _smooth_heatmap(data, sigma):
                 Z[i][j] = np.nan
     return Z
 
+def _to_theta_r(x, y):
+    return np.arctan2(y, x), np.sqrt(x**2 + y**2)
+    
+
 # @st.experimental_memo(ttl=24*3600, experimental_allow_widgets=True, show_spinner=True)
 def draw_ccf_annotations(fig, slice, slice_name, edges, message):
     img_str = image_array_to_data_uri(
@@ -242,7 +275,7 @@ def draw_ccf_annotations(fig, slice, slice_name, edges, message):
     xx, yy = edges
     fig.add_trace(go.Scatter(x=yy * CCF_RESOLUTION, y=xx * CCF_RESOLUTION, 
                              mode='markers',
-                             marker={'color': 'rgba(0, 0, 0, 0.5)', 'size': 1},
+                             marker={'color': 'rgba(0, 0, 0, 0.3)', 'size': 2},
                              hoverinfo='skip',
                              showlegend=False,
                              ))
@@ -341,7 +374,7 @@ def plot_coronal_slice_unit(ccf_x, coronal_slice_thickness, if_flip, *args):
                                coronal_edges, message)
 
     # -- overlayed units --
-    units_to_overlay = aggrid_outputs['data'].query(f'{ccf_x - coronal_slice_thickness/2} < ccf_x and ccf_x <= {ccf_x + coronal_slice_thickness/2}')
+    units_to_overlay = df_unit_filtered.query(f'{ccf_x - coronal_slice_thickness/2} < ccf_x and ccf_x <= {ccf_x + coronal_slice_thickness/2}')
     
     if len(units_to_overlay):
     
@@ -397,14 +430,14 @@ def plot_saggital_slice_unit(ccf_z, saggital_slice_thickness, if_flip, *args):
                                saggital_edges, message)
 
     # -- overlayed units --
-    if len(aggrid_outputs['data']):
-        aggrid_outputs['data']['ccf_z_in_slice_plot'] = aggrid_outputs['data']['ccf_z']
+    if len(df_unit_filtered):
+        df_unit_filtered['ccf_z_in_slice_plot'] = df_unit_filtered['ccf_z']
         if if_flip:
-            to_flip_idx = aggrid_outputs['data']['ccf_z_in_slice_plot'] > 5700
-            to_flip_value = aggrid_outputs['data']['ccf_z_in_slice_plot'][to_flip_idx]
-            aggrid_outputs['data'].loc[to_flip_idx, 'ccf_z_in_slice_plot'] = 2 * 5700 - to_flip_value
+            to_flip_idx = df_unit_filtered['ccf_z_in_slice_plot'] > 5700
+            to_flip_value = df_unit_filtered['ccf_z_in_slice_plot'][to_flip_idx]
+            df_unit_filtered.loc[to_flip_idx, 'ccf_z_in_slice_plot'] = 2 * 5700 - to_flip_value
             
-        units_to_overlay = aggrid_outputs['data'].query(f'{ccf_z - saggital_slice_thickness/2} < ccf_z_in_slice_plot and ccf_z_in_slice_plot <= {ccf_z + saggital_slice_thickness/2}')
+        units_to_overlay = df_unit_filtered.query(f'{ccf_z - saggital_slice_thickness/2} < ccf_z_in_slice_plot and ccf_z_in_slice_plot <= {ccf_z + saggital_slice_thickness/2}')
     
     if len(units_to_overlay):
         x = units_to_overlay['ccf_x']
@@ -474,6 +507,17 @@ st.markdown('## Foraging Unit Browser')
 
 
 with st.sidebar:
+    
+    # -- axes selector --
+    with st.expander("Scatter view settings", expanded=True):
+        with st.form("axis_selection"):
+            col3, col4 = st.columns([1, 1])
+            with col3:
+                x_name = st.selectbox("x axis", scatter_stats_names, index=scatter_stats_names.index('t_dQ_iti'))
+            with col4:
+                y_name = st.selectbox("y axis", scatter_stats_names, index=scatter_stats_names.index('t_sumQ_iti'))
+            st.form_submit_button("update axes")
+            
     with st.expander("CCF view settings", expanded=True):
         
         if_flip = st.checkbox("Flip to left hemisphere", value=True)
@@ -489,42 +533,40 @@ with st.sidebar:
         with st.expander("Heatmap settings", expanded=True):
             heatmap_aggr_name = st.selectbox("aggregate function", _ccf_heatmap_available_aggr_funcs(value_to_map), index=0)
                         
-            if_bi_directional_heatmap = not (if_take_abs or any(s in value_to_map for s in ['rate']) or '%' in heatmap_aggr_name) # number_or_units or % sign_units
+            if_bi_directional_heatmap = not (if_take_abs or any(s in value_to_map for s in ['rate']) or 'units' in heatmap_aggr_name) # number_or_units or % sign_units
             heatmap_aggr_func, heatmap_color_ranges = _ccf_heatmap_get_aggr_func(heatmap_aggr_name, value_to_map)
             
             sign_level = st.number_input("significant level: t >= ", value=2, disabled='significant' not in heatmap_aggr_name)
 
             heatmap_color_range = st.slider(f"Heatmap color range ({heatmap_aggr_name})", heatmap_color_ranges[0], heatmap_color_ranges[1], step=heatmap_color_ranges[2], value=heatmap_color_ranges[3])
-            heatmap_bin_size = st.slider("Heatmap bin size", 25, 500, step=25, value=150)
+            heatmap_bin_size = st.slider("Heatmap bin size", 25, 500, step=25, value=100)
             heatmap_smooth = st.slider("Heatmap smooth factor", 0.0, 2.0, step=0.1, value=1.0)
             
 
         
 with st.container():
-    col1, col2 = st.columns([1.5, 1], gap='small')
-    with col1:
-        # -- 1. unit dataframe --
-        st.markdown('### Filtering units in this table has global effect (select one line to plot unit below)')
-        aggrid_outputs = aggrid_interactive_table_units(df=df['ephys_units'])
-        st.write(f"{len(aggrid_outputs['data'])} units filtered" + ' (data fetched from S3)' if use_s3 else '(data fetched from local)')
+    # col1, col2 = st.columns([1.5, 1], gap='small')
+    # with col1:
+    # -- 1. unit dataframe --
+    st.markdown('### Filtering units in this table has global effect (select one line to plot unit below)')
+    aggrid_outputs = aggrid_interactive_table_units(df=df['ephys_units'])
+    df_unit_filtered = aggrid_outputs['data']
+    
+    st.write(f"{len(df_unit_filtered)} units filtered" + ' (data fetched from S3)' if use_s3 else '(data fetched from local)')
+    st.markdown('### Select views')
 
-        
-        # -- axes selector --
-        with st.columns([2, 1])[1]:
-            with st.expander("Select X and Y axes", expanded=True):
-                with st.form("axis_selection"):
-                    col3, col4 = st.columns([1, 1])
-                    with col3:
-                        x_name = st.selectbox("x axis", scatter_stats_names, index=scatter_stats_names.index('t_dQ_iti'))
-                    with col4:
-                        y_name = st.selectbox("y axis", scatter_stats_names, index=scatter_stats_names.index('t_sumQ_iti'))
-                    st.form_submit_button("update axes")
-        
-    with col2:
-        # -- scatter plot --
-        container_scatter = st.container()
+tabs_font_css = """
+<style>
+button[data-baseweb="tab"] {
+  font-size: 20px;
+}
+</style>
+"""
+st.write(tabs_font_css, unsafe_allow_html=True)
+tab_ccf_view, tab_scatter = st.tabs(["CCF view", "Scatter view"])
 
-with st.container():
+
+with tab_ccf_view:
     # --- coronal slice ---
     col_coronal, col_saggital = st.columns((1, 1.8))
     with col_coronal:
@@ -543,22 +585,48 @@ with st.container():
 
 container_unit_all_in_one = st.container()
 
-with container_scatter:
+
+with tab_scatter:
     # -- scatter --
-    if len(aggrid_outputs['data']):
-        fig = plot_scatter(aggrid_outputs['data'], x_name=x_name, y_name=y_name)
+    col1, col2 = st.columns((1, 1))
+    with col1:  # Raw scatter
+        if len(df_unit_filtered):
+            if_use_ccf_color = st.checkbox("Use ccf color", value=False)
+            fig = plot_scatter(df_unit_filtered, x_name=x_name, y_name=y_name, if_use_ccf_color=if_use_ccf_color)
+            
+            if len(st.session_state.selected_points):
+                fig.add_trace(go.Scatter(x=[st.session_state.selected_points[0]['x']], 
+                                    y=[st.session_state.selected_points[0]['y']], 
+                                mode = 'markers',
+                                marker_symbol = 'star',
+                                marker_size = 15,
+                                marker_color='black',
+                                name='selected'))
+            
+            # Select other Plotly events by specifying kwargs
+            selected_points_scatter = plotly_events(fig, click_event=True, hover_event=False, select_event=False,
+                                                    override_height=800, override_width=800)
         
-        if len(st.session_state.selected_points):
-            fig.add_trace(go.Scatter(x=[st.session_state.selected_points[0]['x']], 
-                                y=[st.session_state.selected_points[0]['y']], 
-                            mode = 'markers',
-                            marker_symbol = 'star',
-                            marker_size = 15,
-                            name='selected'))
-        
-        # Select other Plotly events by specifying kwargs
-        selected_points_scatter = plotly_events(fig, click_event=True, hover_event=False, select_event=False,
-                                        override_height=800, override_width=800)
+    with col2: # Polar distribution
+        if len(df_unit_filtered):   
+            col21, col22, col23 = st.columns((1,1,1))
+            with col21:
+                n_bins = st.slider("number of polar bins", 4, 32, 16, 4)
+            with col22:
+                if_sign_only = st.checkbox("significant only", value=True)
+            with col23:
+                if_weighted_by_r = st.checkbox("weighted by r", value=True)
+            
+            bins = np.linspace(-np.pi, np.pi, num=n_bins + 1)
+            
+            fig = plot_polar(df_unit_filtered, x_name, y_name, if_sign_only, if_weighted_by_r, n_bins)
+
+            # # Select other Plotly events by specifying kwargs
+            # selected_points_scatter = plotly_events(fig, click_event=True, hover_event=False, select_event=False,
+            #                                         override_height=800, override_width=800)
+            st.plotly_chart(fig, use_container_width=True)
+        pass
+    
  
 with container_coronal:
     fig = plot_coronal_slice_unit(ccf_x, coronal_thickness, if_flip) #, [size_to_map, size_gamma, size_range], aggrid_outputs, ccf_z, saggital_thickness)
