@@ -112,12 +112,12 @@ def plot_scatter(data, x_name='dQ_iti', y_name='sumQ_iti', if_use_ccf_color=Fals
                      hover_data=['annotation'],
                      color_discrete_map=aoi_color_mapping if if_use_ccf_color else None)
     
-    fig.add_vline(x=2.0, line_width=1, line_dash="dash", line_color="black")
-    fig.add_vline(x=-2.0, line_width=1, line_dash="dash", line_color="black")
-    fig.add_hline(y=2.0, line_width=1, line_dash="dash", line_color="black")
-    fig.add_hline(y=-2.0, line_width=1, line_dash="dash", line_color="black")
-
-    fig.add_hline(y=2.0, line_width=1, line_dash="dash", line_color="black")
+    if 't_' in x_name:
+        fig.add_vline(x=2.0, line_width=1, line_dash="dash", line_color="black")
+        fig.add_vline(x=-2.0, line_width=1, line_dash="dash", line_color="black")
+    if 't_' in y_name:
+        fig.add_hline(y=2.0, line_width=1, line_dash="dash", line_color="black")
+        fig.add_hline(y=-2.0, line_width=1, line_dash="dash", line_color="black")
         
     # fig.update_xaxes(range=[-40, 40])
     # fig.update_yaxes(range=[-40, 40])
@@ -132,31 +132,58 @@ def plot_scatter(data, x_name='dQ_iti', y_name='sumQ_iti', if_use_ccf_color=Fals
             
     return fig
 
+@st.experimental_memo(ttl=24*3600)
+def _polar_histogram(df_this_aoi, x_name, y_name, polar_method, bins):
+
+    df_sig = df_this_aoi.query(f'abs({x_name}) >= {sign_level} or abs({y_name}) >= {sign_level}')
+    theta, r = _to_theta_r(df_sig[x_name], df_sig[y_name])
+    weight = r if 'weighted' in polar_method else np.ones_like(theta)
+
+    counts, _ = np.histogram(a=theta, bins=bins, weights=weight)
+    
+    if 'in all neurons' in polar_method:
+        return counts / len(df_this_aoi)  # Not sum to 1
+    elif 'in significant neurons' in polar_method:
+        return counts / len(df_sig)  # Sum to 1
+    else:
+        return counts / np.sum(counts)  # weighted r
+
+
 @st.experimental_memo(ttl=24*3600)        
-def plot_polar(df_unit_filtered, x_name, y_name, if_sign_only, if_weighted_by_r, n_bins):
-    df_to_polar_hist = df_unit_filtered.query(f'abs({x_name}) >= {sign_level} or abs({y_name}) >= {sign_level}') if if_sign_only else df_unit_filtered
-    polar_hist = df_to_polar_hist.groupby('area_of_interest'
-                                            ).apply(lambda x: np.histogram(**{**dict(a=_to_theta_r(x[x_name], x[y_name])[0], bins=bins),
-                                                                            **(dict(weights=_to_theta_r(x[x_name], x[y_name])[1])   # Weighted by r
-                                                                                if if_weighted_by_r else {}
-                                                                                )}
-                                                                            )[0]
-                                                    )
-                                            
+def plot_polar(df_unit_filtered, x_name, y_name, polar_method, n_bins, if_errorbar):
+        
+    bins = np.linspace(-np.pi, np.pi, num=n_bins + 1)
     bin_center = np.rad2deg(np.mean([bins[:-1], bins[1:]], axis=0)) 
 
+    polar_hist = df_unit_filtered.groupby('area_of_interest').apply(lambda df_this_aoi: _polar_histogram(df_this_aoi, x_name, y_name, polar_method, bins))
+
     fig = go.Figure()
+    
     for aoi, hist in polar_hist.items():
-        norm_hist = hist / np.sum(hist) 
-        fig.add_trace(go.Scatterpolar(r=np.hstack([norm_hist, norm_hist[0]]),
+        fig.add_trace(go.Scatterpolar(r=np.hstack([hist, hist[0]]),
                                         theta=np.hstack([bin_center, bin_center[0]]),
-                                        mode='lines',
-                                        name=aoi,
+                                        mode='lines + markers',
                                         marker_color=aoi_color_mapping[aoi], 
+                                        legendgroup=aoi,
+                                        name=aoi,
                     )
                     #   color_discrete_sequence=px.colors.sequential.Plasma_r,
                     #   template="plotly_dark",
                     )
+        
+        # add binomial errorbar
+        if 'in all neurons' in polar_method and if_errorbar:
+            n = len(df_unit_filtered.query(f'area_of_interest == "{aoi}"')) 
+            for p, theta in zip(hist, bin_center):
+                ci_95 = 1.96 * np.sqrt(p * (1 - p) / n)
+                fig.add_trace(go.Scatterpolar(r=[p - ci_95, p + ci_95],
+                                              theta=[theta, theta],
+                                              mode='lines',
+                                              marker_color=aoi_color_mapping[aoi],
+                                              legendgroup=aoi,
+                                              name=aoi,
+                                              showlegend=False,
+                                              ))
         
     fig.update_layout(height=800, width=800)
     return fig
@@ -507,17 +534,7 @@ st.markdown('## Foraging Unit Browser')
 
 
 with st.sidebar:
-    
-    # -- axes selector --
-    with st.expander("Scatter view settings", expanded=True):
-        with st.form("axis_selection"):
-            col3, col4 = st.columns([1, 1])
-            with col3:
-                x_name = st.selectbox("x axis", scatter_stats_names, index=scatter_stats_names.index('t_dQ_iti'))
-            with col4:
-                y_name = st.selectbox("y axis", scatter_stats_names, index=scatter_stats_names.index('t_sumQ_iti'))
-            st.form_submit_button("update axes")
-            
+                
     with st.expander("CCF view settings", expanded=True):
         
         if_flip = st.checkbox("Flip to left hemisphere", value=True)
@@ -563,7 +580,7 @@ button[data-baseweb="tab"] {
 </style>
 """
 st.write(tabs_font_css, unsafe_allow_html=True)
-tab_ccf_view, tab_scatter = st.tabs(["CCF view", "Scatter view"])
+tab_ccf_view, tab_aoi_view = st.tabs(["CCF VIEW", "AREA OF INTEREST VIEW"])
 
 
 with tab_ccf_view:
@@ -586,7 +603,17 @@ with tab_ccf_view:
 container_unit_all_in_one = st.container()
 
 
-with tab_scatter:
+with tab_aoi_view:
+    # -- axes selector --
+    with st.expander("Select axes", expanded=False):
+        with st.form("axis_selection"):
+            col3, col4 = st.columns([1, 1])
+            with col3:
+                x_name = st.selectbox("x axis", scatter_stats_names, index=scatter_stats_names.index('t_dQ_iti'))
+            with col4:
+                y_name = st.selectbox("y axis", scatter_stats_names, index=scatter_stats_names.index('t_sumQ_iti'))
+            st.form_submit_button("update axes")
+
     # -- scatter --
     col1, col2 = st.columns((1, 1))
     with col1:  # Raw scatter
@@ -613,13 +640,14 @@ with tab_scatter:
             with col21:
                 n_bins = st.slider("number of polar bins", 4, 32, 16, 4)
             with col22:
-                if_sign_only = st.checkbox("significant only", value=True)
+                polar_method = st.selectbox(label="polar method", options=['proportion in all neurons', 
+                                                                           'proportion in significant neurons',
+                                                                           'significant units weighted by r'],
+                                            index=0)
             with col23:
-                if_weighted_by_r = st.checkbox("weighted by r", value=True)
-            
-            bins = np.linspace(-np.pi, np.pi, num=n_bins + 1)
-            
-            fig = plot_polar(df_unit_filtered, x_name, y_name, if_sign_only, if_weighted_by_r, n_bins)
+                if_errorbar = st.checkbox("binomial 95% CI", value=True, disabled='in all neurons' not in polar_method)
+                        
+            fig = plot_polar(df_unit_filtered, x_name, y_name, polar_method, n_bins, if_errorbar)
 
             # # Select other Plotly events by specifying kwargs
             # selected_points_scatter = plotly_events(fig, click_event=True, hover_event=False, select_event=False,
