@@ -92,9 +92,14 @@ def load_data(tables=['sessions']):
         
     return df
     
-df = load_data(['sessions', 'ephys_units', 'aoi_color'])
-aoi_color_mapping = {area: f'rgb({",".join(col.astype(str))})' for area, col in zip(df['aoi_color'].index, df['aoi_color'].rgb)}
-aoi_color_mapping['others'] = 'rgb(0, 0, 0)'
+df = load_data(['sessions', 'ephys_units', 'aoi'])
+aoi_color_mapping = {area: f'rgb({",".join(col.astype(str))})' for area, col in zip(df['aoi'].index, df['aoi'].rgb)}
+
+pure_unit_color_mapping =  {'pure_dQ': 'darkviolet',
+                            'pure_sumQ': 'deepskyblue',
+                            'pure_contraQ': 'darkblue',
+                            'pure_ipsiQ': 'darkorange'}
+
 
 @st.experimental_memo(ttl=24*3600)
 def get_fig(key):
@@ -107,10 +112,21 @@ def get_fig(key):
 
 @st.experimental_memo(ttl=24*3600)
 def plot_scatter(data, x_name='dQ_iti', y_name='sumQ_iti', if_use_ccf_color=False):
-    fig = px.scatter(data, x=x_name, y=y_name, 
-                     color='area_of_interest', symbol="area_of_interest",
-                     hover_data=['annotation'],
-                     color_discrete_map=aoi_color_mapping if if_use_ccf_color else None)
+    
+    fig = go.Figure()
+    
+    for aoi in df['aoi'].index:
+        this_aoi = data.query(f'area_of_interest == "{aoi}"')
+        fig.add_trace(go.Scatter(x=this_aoi[x_name], 
+                                 y=this_aoi[y_name],
+                                 mode="markers",
+                                 marker_color=aoi_color_mapping[aoi] if if_use_ccf_color else None,
+                                 name=aoi))
+        
+    # fig = px.scatter(data, x=x_name, y=y_name, 
+    #                 color='area_of_interest', symbol="area_of_interest",
+    #                 hover_data=['annotation'],
+    #                 color_discrete_map=aoi_color_mapping if if_use_ccf_color else None)
     
     if 't_' in x_name:
         fig.add_vline(x=2.0, line_width=1, line_dash="dash", line_color="black")
@@ -122,7 +138,7 @@ def plot_scatter(data, x_name='dQ_iti', y_name='sumQ_iti', if_use_ccf_color=Fals
     # fig.update_xaxes(range=[-40, 40])
     # fig.update_yaxes(range=[-40, 40])
     
-    fig.update_layout(width = 800, height = 800)
+    fig.update_layout(width = 900, height = 900)
     
     if all(any([s in name for s in ['t_', 'beta_']]) for name in [x_name, y_name]):
         fig.update_yaxes(
@@ -130,6 +146,52 @@ def plot_scatter(data, x_name='dQ_iti', y_name='sumQ_iti', if_use_ccf_color=Fals
             scaleratio = 1,
         )
             
+    return fig
+
+
+@st.experimental_memo(ttl=24*3600)
+def plot_unit_class_scatter(x_name, y_name):
+
+    fig = go.Figure()
+    
+    for unit_class, color in pure_unit_color_mapping.items():
+        this = df_unit_filtered[f'{unit_class}_dQ_sumQ']
+        fig.add_trace(go.Scatter(x=df_unit_filtered[x_name][this], 
+                                    y=df_unit_filtered[y_name][this], 
+                                    mode='markers',
+                                    marker_color=color, 
+                                    name=f'{unit_class}_dQ_sumQ'
+                                ))
+        
+    fig.add_trace(go.Scatter(x=df_unit_filtered.query('p_model_iti >= 0.01')[x_name], 
+                                y=df_unit_filtered.query('p_model_iti >= 0.01')[y_name], 
+                            mode='markers',
+                            marker_color='black', 
+                            name='non_sig'
+                    ))
+    fig.update_layout(width=500, height=900)
+    fig.update_yaxes(scaleanchor = "x", scaleratio = 1)
+            
+    return fig
+
+@st.experimental_memo(ttl=24*3600)
+def plot_unit_class_bar():
+    linear_model = '_dQ_sumQ'
+    fig = go.Figure()
+    for pure_class, color in pure_unit_color_mapping.items():
+        data = df['aoi'][pure_class + linear_model].values
+        fig.add_trace(go.Bar(
+                            name=pure_class,
+                            x=df['aoi'].index, 
+                            y=[x[0] for x in data],
+                            error_y=dict(type='data', array=[x[1] for x in data]),
+                            marker=dict(color=color),
+                            ))
+    
+    fig.update_layout(barmode='group', 
+                      height=800,
+                      yaxis_title='% pure units (+/- 95% CI)',
+                      )    
     return fig
 
 @st.experimental_memo(ttl=24*3600)
@@ -142,9 +204,9 @@ def _polar_histogram(df_this_aoi, x_name, y_name, polar_method, bins):
     counts, _ = np.histogram(a=theta, bins=bins, weights=weight)
     
     if 'in all neurons' in polar_method:
-        return counts / len(df_this_aoi)  # Not sum to 1
+        return counts / len(df_this_aoi) * 100 # Not sum to 1
     elif 'in significant neurons' in polar_method:
-        return counts / len(df_sig)  # Sum to 1
+        return counts / len(df_sig) * 100 # Sum to 1
     else:
         return counts / np.sum(counts)  # weighted r
 
@@ -157,9 +219,10 @@ def plot_polar(df_unit_filtered, x_name, y_name, polar_method, n_bins, if_errorb
 
     polar_hist = df_unit_filtered.groupby('area_of_interest').apply(lambda df_this_aoi: _polar_histogram(df_this_aoi, x_name, y_name, polar_method, bins))
 
-    fig = go.Figure()
+    fig = go.Figure() 
     
-    for aoi, hist in polar_hist.items():
+    for aoi in df['aoi'].index:
+        hist = polar_hist[aoi]
         fig.add_trace(go.Scatterpolar(r=np.hstack([hist, hist[0]]),
                                         theta=np.hstack([bin_center, bin_center[0]]),
                                         mode='lines + markers',
@@ -175,7 +238,7 @@ def plot_polar(df_unit_filtered, x_name, y_name, polar_method, n_bins, if_errorb
         if 'in all neurons' in polar_method and if_errorbar:
             n = len(df_unit_filtered.query(f'area_of_interest == "{aoi}"')) 
             for p, theta in zip(hist, bin_center):
-                ci_95 = 1.96 * np.sqrt(p * (1 - p) / n)
+                ci_95 = 1.96 * np.sqrt(p * (100 - p) / n)
                 fig.add_trace(go.Scatterpolar(r=[p - ci_95, p + ci_95],
                                               theta=[theta, theta],
                                               mode='lines',
@@ -509,11 +572,14 @@ def ccf_z_to_ML(ccf_z):
 scatter_stats_names = [keys for keys in df['ephys_units'].keys() if any([s in keys for s in ['dQ', 'sumQ', 'contraQ', 'ipsiQ', 'rpe', 'ccf', 'firing_rate']])]
 ccf_stat_names = [n for n in scatter_stats_names if 'ccf' not in n]
 
-def _ccf_heatmap_available_aggr_funcs(heatmap_to_map):
-    return ([r'% significant units'] if all(s not in heatmap_to_map for s in ['avg_firing_rate', 'beta']) 
-            else []) + ['median', 'median (significant only)', 'mean', 'mean (significant only)', 'number of units']
+def _ccf_heatmap_available_aggr_funcs(value_to_map):
+    if 'pure' not in value_to_map:
+        return ([r'% significant units'] if all(s not in value_to_map for s in ['avg_firing_rate', 'beta']) 
+                else []) + ['median', 'median (significant only)', 'mean', 'mean (significant only)', 'number of units']
+    else:
+        return [r'% pure units']
 
-def _ccf_heatmap_get_aggr_func(heatmap_aggr_name, heatmap_to_map):
+def _ccf_heatmap_get_aggr_func(heatmap_aggr_name, value_to_map):
     heatmap_aggr_func_mapping = {    # func, (min, max, step, default)
         'median': ('median', (0.0, 15.0, 1.0, 5.0 if if_bi_directional_heatmap else (2.0, 5.0))),  
         'median (significant only)': (lambda x: np.median(x[np.abs(x) >= sign_level]), (0.0, 15.0, 1.0, 5.0 if if_bi_directional_heatmap else (2.0, 5.0))),  
@@ -521,6 +587,7 @@ def _ccf_heatmap_get_aggr_func(heatmap_aggr_name, heatmap_to_map):
         'mean (significant only)': (lambda x: np.mean(x[np.abs(x) >= sign_level]), (0.0, 15.0, 1.0, 5.0 if if_bi_directional_heatmap else (2.0, 5.0))),
         r'% significant units': (lambda x: sum(np.abs(x) >= sign_level) / len(x) * 100, (5, 100, 5, (30, 80))),
         'number of units': (lambda x: len(x) if len(x) else np.nan, (0, 50, 5, (0, 20))),
+        r'% pure units': (lambda x: sum(x) / len(x) * 100, (0, 100, 1, (5, 80))),
         # 'max': ('max', (0.0, 15.0, 1.0, (0.0, 5.0))),
         # 'min': ('min', (0.0, 15.0, 1.0, (0.0, 5.0))),
     }
@@ -580,7 +647,7 @@ button[data-baseweb="tab"] {
 </style>
 """
 st.write(tabs_font_css, unsafe_allow_html=True)
-tab_ccf_view, tab_aoi_view = st.tabs(["CCF VIEW", "AREA OF INTEREST VIEW"])
+tab_ccf_view, tab_aoi_view = st.tabs(['**CCF VIEW**', "**AREA OF INTEREST VIEW**"])
 
 
 with tab_ccf_view:
@@ -618,21 +685,26 @@ with tab_aoi_view:
     col1, col2 = st.columns((1, 1))
     with col1:  # Raw scatter
         if len(df_unit_filtered):
-            if_use_ccf_color = st.checkbox("Use ccf color", value=False)
+            if_use_ccf_color = st.checkbox("Use ccf color", value=True)
             fig = plot_scatter(df_unit_filtered, x_name=x_name, y_name=y_name, if_use_ccf_color=if_use_ccf_color)
             
             if len(st.session_state.selected_points):
                 fig.add_trace(go.Scatter(x=[st.session_state.selected_points[0]['x']], 
                                     y=[st.session_state.selected_points[0]['y']], 
-                                mode = 'markers',
-                                marker_symbol = 'star',
-                                marker_size = 15,
-                                marker_color='black',
-                                name='selected'))
+                                    mode='markers',
+                                    marker_symbol='star',
+                                    marker_size=15,
+                                    marker_color='black',
+                                    name='selected'))
             
             # Select other Plotly events by specifying kwargs
             selected_points_scatter = plotly_events(fig, click_event=True, hover_event=False, select_event=False,
                                                     override_height=800, override_width=800)
+            
+            # -- debug: unit classifier --
+            fig = plot_unit_class_scatter(x_name, y_name)
+            st.plotly_chart(fig, use_container_width=True)
+            
         
     with col2: # Polar distribution
         if len(df_unit_filtered):   
@@ -654,6 +726,11 @@ with tab_aoi_view:
             #                                         override_height=800, override_width=800)
             st.plotly_chart(fig, use_container_width=True)
         pass
+    
+                
+    # -- bar plot unit classifier --
+    fig = plot_unit_class_bar()
+    st.plotly_chart(fig, use_container_width=True)
     
  
 with container_coronal:
