@@ -180,12 +180,18 @@ def plot_unit_class_bar():
     fig = go.Figure()
     for pure_class, color in pure_unit_color_mapping.items():
         data = df['aoi'][pure_class + linear_model].values
+        prop = [x[0] for x in data]
+        err = [x[1] for x in data]
         fig.add_trace(go.Bar(
                             name=pure_class,
                             x=df['aoi'].index, 
-                            y=[x[0] for x in data],
-                            error_y=dict(type='data', array=[x[1] for x in data]),
+                            y=prop,
+                            error_y=dict(type='data', array=err),
                             marker=dict(color=color),
+                            hovertemplate='%%{x}, %s' % (pure_class) + 
+                                          '<br>%{y:.1f} ± %{customdata[0]:.1f} % (95% CI)' + 
+                                          '<br>n = %{customdata[1]} <extra></extra>',
+                            customdata=np.stack((err, df['aoi'].number_of_units), axis=-1),
                             ))
     
     fig.update_layout(barmode='group', 
