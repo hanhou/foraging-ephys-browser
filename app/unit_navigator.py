@@ -100,6 +100,12 @@ pure_unit_color_mapping =  {'pure_dQ': 'darkviolet',
                             'pure_contraQ': 'darkblue',
                             'pure_ipsiQ': 'darkorange'}
 
+sig_prop_color_mapping =  {'dQ': 'darkviolet',
+                            'sumQ': 'deepskyblue',
+                            'contraQ': 'darkblue',
+                            'ipsiQ': 'darkorange',
+                            'rpe': 'gray'}
+
 
 @st.experimental_memo(ttl=24*3600)
 def get_fig(key):
@@ -111,7 +117,7 @@ def get_fig(key):
 
 
 @st.experimental_memo(ttl=24*3600)
-def plot_scatter(data, x_name='dQ_iti', y_name='sumQ_iti', if_use_ccf_color=False):
+def plot_scatter(data, x_name='dQ_iti', y_name='sumQ_iti', if_use_ccf_color=False, sign_level=2.57):
     
     fig = go.Figure()
     
@@ -129,11 +135,11 @@ def plot_scatter(data, x_name='dQ_iti', y_name='sumQ_iti', if_use_ccf_color=Fals
     #                 color_discrete_map=aoi_color_mapping if if_use_ccf_color else None)
     
     if 't_' in x_name:
-        fig.add_vline(x=2.0, line_width=1, line_dash="dash", line_color="black")
-        fig.add_vline(x=-2.0, line_width=1, line_dash="dash", line_color="black")
+        fig.add_vline(x=sign_level, line_width=1, line_dash="dash", line_color="black")
+        fig.add_vline(x=-sign_level, line_width=1, line_dash="dash", line_color="black")
     if 't_' in y_name:
-        fig.add_hline(y=2.0, line_width=1, line_dash="dash", line_color="black")
-        fig.add_hline(y=-2.0, line_width=1, line_dash="dash", line_color="black")
+        fig.add_hline(y=sign_level, line_width=1, line_dash="dash", line_color="black")
+        fig.add_hline(y=-sign_level, line_width=1, line_dash="dash", line_color="black")
         
     # fig.update_xaxes(range=[-40, 40])
     # fig.update_yaxes(range=[-40, 40])
@@ -169,13 +175,13 @@ def plot_unit_class_scatter(x_name, y_name):
                             marker_color='black', 
                             name='non_sig'
                     ))
-    fig.update_layout(width=500, height=900)
+    fig.update_layout(width=500, height=500)
     fig.update_yaxes(scaleanchor = "x", scaleratio = 1)
             
     return fig
 
 @st.experimental_memo(ttl=24*3600)
-def plot_unit_class_bar():
+def plot_unit_pure_class_bar():
     linear_model = '_dQ_sumQ'
     fig = go.Figure()
     for pure_class, color in pure_unit_color_mapping.items():
@@ -194,11 +200,57 @@ def plot_unit_class_bar():
                             customdata=np.stack((err, df['aoi'].number_of_units), axis=-1),
                             ))
     
+    fig.add_hline(y=0.01 * 100 / 4, line_width=1, line_dash="dash", line_color="black", name='Type I error')  # Type I error (I used p < 0.01 when classify units) devided by 4 types
     fig.update_layout(barmode='group', 
                       height=800,
                       yaxis_title='% pure units (+/- 95% CI)',
                       )    
     return fig
+
+# Add proportion of pure units
+def _sig_proportion(ts):
+    prop = np.sum(np.abs(ts) >= sign_level) / len(ts)
+    ci_95 = 1.96 * np.sqrt(prop * (1 - prop) / len(ts))
+    return prop * 100, ci_95 * 100, len(ts)
+
+@st.experimental_memo(ttl=24*3600)
+def plot_unit_sig_prop_bar(sign_level):
+    
+    fig = go.Figure()
+    period = 'iti'    
+        
+    for stat_name, color in sig_prop_color_mapping.items():
+        col = f't_{stat_name}_{period}'
+        
+        prop_ci = df_unit_filtered.groupby('area_of_interest')[col].agg(_sig_proportion).values
+        prop = [x[0] for x in prop_ci] 
+        err = [x[1] for x in prop_ci] 
+        ns =  [x[2] for x in prop_ci] 
+
+        fig.add_trace(go.Bar(
+                            name=f'{stat_name}, {period}',
+                            x=df['aoi'].index, 
+                            y=prop,
+                            error_y=dict(type='data', array=err),
+                            hovertemplate='%%{x}, %s, %s' % (stat_name, period) + 
+                                          '<br>%{y:.1f} ± %{customdata[0]:.1f} % (95% CI)' + 
+                                          '<br>n = %{customdata[1]} <extra></extra>',
+                            customdata=np.stack((err, ns), axis=-1),
+                            marker=dict(
+                                        color=color,
+                                        line_color=color,
+                                        line_width=3,
+                                        pattern_shape='/', 
+                                        pattern_fillmode="replace",
+                                        ),
+                            ))
+    
+    fig.update_layout(barmode='group', 
+                      height=800,
+                      yaxis_title='% sig. units (+/- 95% CI)',
+                      )    
+    return fig
+
 
 @st.experimental_memo(ttl=24*3600)
 def _polar_histogram(df_this_aoi, x_name, y_name, polar_method, bins):
@@ -253,7 +305,15 @@ def plot_polar(df_unit_filtered, x_name, y_name, polar_method, n_bins, if_errorb
                                               name=aoi,
                                               showlegend=False,
                                               ))
-        
+    
+    # add type I error
+    fig.add_trace(go.Scatterpolar(r=np.full(len(bin_center) + 1, 0.01 * 100 / n_bins),
+                                  theta=np.hstack([bin_center, bin_center[0]]),
+                                  mode='lines',
+                                  line=dict(color='black', dash='dot'),
+                                  name='Type I error'
+                                  )) # Type I error divided by 4
+    
     fig.update_layout(height=800, width=800)
     return fig
 
@@ -626,7 +686,7 @@ with st.sidebar:
             if_bi_directional_heatmap = not (if_take_abs or any(s in value_to_map for s in ['rate']) or 'units' in heatmap_aggr_name) # number_or_units or % sign_units
             heatmap_aggr_func, heatmap_color_ranges = _ccf_heatmap_get_aggr_func(heatmap_aggr_name, value_to_map)
             
-            sign_level = st.number_input("significant level: t >= ", value=2, disabled='significant' not in heatmap_aggr_name)
+            sign_level = st.number_input("significant level: t >= ", value=2.57, disabled='significant' not in heatmap_aggr_name, step=1.0)
 
             heatmap_color_range = st.slider(f"Heatmap color range ({heatmap_aggr_name})", heatmap_color_ranges[0], heatmap_color_ranges[1], step=heatmap_color_ranges[2], value=heatmap_color_ranges[3])
             heatmap_bin_size = st.slider("Heatmap bin size", 25, 500, step=25, value=100)
@@ -653,7 +713,7 @@ button[data-baseweb="tab"] {
 </style>
 """
 st.write(tabs_font_css, unsafe_allow_html=True)
-tab_ccf_view, tab_aoi_view = st.tabs(['**CCF VIEW**', "**AREA OF INTEREST VIEW**"])
+tab_ccf_view, tab_aoi_view = st.tabs(['**1. CCF VIEW**', "**2. AREA OF INTEREST VIEW**"])
 
 
 with tab_ccf_view:
@@ -692,7 +752,7 @@ with tab_aoi_view:
     with col1:  # Raw scatter
         if len(df_unit_filtered):
             if_use_ccf_color = st.checkbox("Use ccf color", value=True)
-            fig = plot_scatter(df_unit_filtered, x_name=x_name, y_name=y_name, if_use_ccf_color=if_use_ccf_color)
+            fig = plot_scatter(df_unit_filtered, x_name=x_name, y_name=y_name, if_use_ccf_color=if_use_ccf_color, sign_level=sign_level)
             
             if len(st.session_state.selected_points):
                 fig.add_trace(go.Scatter(x=[st.session_state.selected_points[0]['x']], 
@@ -706,11 +766,7 @@ with tab_aoi_view:
             # Select other Plotly events by specifying kwargs
             selected_points_scatter = plotly_events(fig, click_event=True, hover_event=False, select_event=False,
                                                     override_height=800, override_width=800)
-            
-            # -- debug: unit classifier --
-            fig = plot_unit_class_scatter(x_name, y_name)
-            st.plotly_chart(fig, use_container_width=True)
-            
+                    
         
     with col2: # Polar distribution
         if len(df_unit_filtered):   
@@ -734,9 +790,20 @@ with tab_aoi_view:
         pass
     
                 
-    # -- bar plot unit classifier --
-    fig = plot_unit_class_bar()
+    # -- bar plot unit sig proportion
+    st.markdown(f'### Proportion of significant neurons (for each variable, abs(t) > {sign_level})')
+    fig = plot_unit_sig_prop_bar(sign_level)
     st.plotly_chart(fig, use_container_width=True)
+    
+    # -- bar plot unit pure classifier --
+    st.markdown(f'### Proportion of "pure" neurons (p_model < 0.01; polar classification)')
+    fig = plot_unit_pure_class_bar()
+    st.plotly_chart(fig, use_container_width=True)
+    
+    with st.columns((1, 2))[0]:
+        fig = plot_unit_class_scatter(x_name, y_name)
+        st.plotly_chart(fig, use_container_width=True)
+
     
  
 with container_coronal:
