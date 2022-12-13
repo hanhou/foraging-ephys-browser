@@ -122,6 +122,9 @@ def plot_scatter(data, x_name='dQ_iti', y_name='sumQ_iti', if_use_ccf_color=Fals
     fig = go.Figure()
     
     for aoi in df['aoi'].index:
+        if aoi not in df_unit_filtered.area_of_interest.values:
+            continue
+        
         this_aoi = data.query(f'area_of_interest == "{aoi}"')
         fig.add_trace(go.Scatter(x=this_aoi[x_name], 
                                  y=this_aoi[y_name],
@@ -214,7 +217,7 @@ def _sig_proportion(ts):
     return prop * 100, ci_95 * 100, len(ts)
 
 @st.experimental_memo(ttl=24*3600)
-def plot_unit_sig_prop_bar(sign_level):
+def plot_unit_sig_prop_bar(df_unit_filtered, sign_level):
     
     fig = go.Figure()
     period = 'iti'    
@@ -222,14 +225,16 @@ def plot_unit_sig_prop_bar(sign_level):
     for stat_name, color in sig_prop_color_mapping.items():
         col = f't_{stat_name}_{period}'
         
-        prop_ci = df_unit_filtered.groupby('area_of_interest')[col].agg(_sig_proportion).values
-        prop = [x[0] for x in prop_ci] 
-        err = [x[1] for x in prop_ci] 
-        ns =  [x[2] for x in prop_ci] 
+        prop_ci = df_unit_filtered.groupby('area_of_interest')[col].agg(_sig_proportion)
+        filtered_aoi = [col for col in df['aoi'].index if col in prop_ci] # Sort according to df['aoi'].index
+        prop_ci = prop_ci.reindex(filtered_aoi)
+        prop = [x[0] for x in prop_ci.values] 
+        err = [x[1] for x in prop_ci.values] 
+        ns =  [x[2] for x in prop_ci.values] 
 
-        fig.add_trace(go.Bar(
+        fig.add_trace(go.Bar( 
                             name=f'{stat_name}, {period}',
-                            x=df['aoi'].index, 
+                            x=filtered_aoi,
                             y=prop,
                             error_y=dict(type='data', array=err),
                             hovertemplate='%%{x}, %s, %s' % (stat_name, period) + 
@@ -280,6 +285,9 @@ def plot_polar(df_unit_filtered, x_name, y_name, polar_method, n_bins, if_errorb
     fig = go.Figure() 
     
     for aoi in df['aoi'].index:
+        if aoi not in df_unit_filtered.area_of_interest.values:
+            continue
+        
         hist = polar_hist[aoi]
         fig.add_trace(go.Scatterpolar(r=np.hstack([hist, hist[0]]),
                                         theta=np.hstack([bin_center, bin_center[0]]),
@@ -791,12 +799,12 @@ with tab_aoi_view:
     
                 
     # -- bar plot unit sig proportion
-    st.markdown(f'### Proportion of significant neurons (for each variable, abs(t) > {sign_level})')
-    fig = plot_unit_sig_prop_bar(sign_level)
+    st.markdown(f'### Proportion of significant neurons for each variable (abs(t) > {sign_level}), errorbar = binomial 95% CI')
+    fig = plot_unit_sig_prop_bar(df_unit_filtered, sign_level)
     st.plotly_chart(fig, use_container_width=True)
     
     # -- bar plot unit pure classifier --
-    st.markdown(f'### Proportion of "pure" neurons (p_model < 0.01; polar classification)')
+    st.markdown(f'### Proportion of "pure" neurons (p_model < 0.01; polar classification), errorbar = binomial 95% CI')
     fig = plot_unit_pure_class_bar()
     st.plotly_chart(fig, use_container_width=True)
     
