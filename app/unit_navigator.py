@@ -147,7 +147,7 @@ def plot_scatter(data, x_name='dQ_iti', y_name='sumQ_iti', if_use_ccf_color=Fals
     # fig.update_xaxes(range=[-40, 40])
     # fig.update_yaxes(range=[-40, 40])
     
-    fig.update_layout(width = 900, height = 900)
+    fig.update_layout(width=900, height=800, font=dict(size=20), xaxis_title=x_name, yaxis_title=y_name)
     
     if all(any([s in name for s in ['t_', 'beta_']]) for name in [x_name, y_name]):
         fig.update_yaxes(
@@ -178,7 +178,7 @@ def plot_unit_class_scatter(x_name, y_name):
                             marker_color='black', 
                             name='non_sig'
                     ))
-    fig.update_layout(width=500, height=500)
+    fig.update_layout(width=500, height=500, font=dict(size=20))
     fig.update_yaxes(scaleanchor = "x", scaleratio = 1)
             
     return fig
@@ -207,6 +207,7 @@ def plot_unit_pure_class_bar():
     fig.update_layout(barmode='group', 
                       height=800,
                       yaxis_title='% pure units (+/- 95% CI)',
+                      font=dict(size=20)
                       )    
     return fig
 
@@ -253,6 +254,7 @@ def plot_unit_sig_prop_bar(df_unit_filtered, sign_level):
     fig.update_layout(barmode='group', 
                       height=800,
                       yaxis_title='% sig. units (+/- 95% CI)',
+                      font=dict(size=20)
                       )    
     return fig
 
@@ -322,7 +324,7 @@ def plot_polar(df_unit_filtered, x_name, y_name, polar_method, n_bins, if_errorb
                                   name='Type I error'
                                   )) # Type I error divided by 4
     
-    fig.update_layout(height=800, width=800)
+    fig.update_layout(height=800, width=800, font=dict(size=20))
     return fig
 
 @st.experimental_memo(ttl=24*3600)
@@ -573,6 +575,7 @@ def plot_coronal_slice_unit(ccf_x, coronal_slice_thickness, if_flip, *args):
                       yaxis_range=[8000, 0],
                       xaxis_title='ccf_z (left -> right)',
                       yaxis_title='ccf_y (superior -> inferior)',
+                      font=dict(size=20)
                       )
     
     # st.plotly_chart(fig, use_container_width=True)
@@ -627,6 +630,7 @@ def plot_saggital_slice_unit(ccf_z, saggital_slice_thickness, if_flip, *args):
                       yaxis_range=[8000, 0],
                       xaxis_title='ccf_x (anterior -> posterior)',
                       yaxis_title='ccf_y (superior -> inferior)',
+                      font=dict(size=20)
                       )
     
     fig.add_vline(x=ccf_x, line_width=1)
@@ -694,12 +698,11 @@ with st.sidebar:
             if_bi_directional_heatmap = not (if_take_abs or any(s in value_to_map for s in ['rate']) or 'units' in heatmap_aggr_name) # number_or_units or % sign_units
             heatmap_aggr_func, heatmap_color_ranges = _ccf_heatmap_get_aggr_func(heatmap_aggr_name, value_to_map)
             
-            sign_level = st.number_input("significant level: t >= ", value=2.57, disabled='significant' not in heatmap_aggr_name, step=1.0)
-
             heatmap_color_range = st.slider(f"Heatmap color range ({heatmap_aggr_name})", heatmap_color_ranges[0], heatmap_color_ranges[1], step=heatmap_color_ranges[2], value=heatmap_color_ranges[3])
             heatmap_bin_size = st.slider("Heatmap bin size", 25, 500, step=25, value=100)
             heatmap_smooth = st.slider("Heatmap smooth factor", 0.0, 2.0, step=0.1, value=1.0)
             
+    sign_level = st.number_input("significant level: t >= ", value=2.57, disabled=False, step=1.0) #'significant' not in heatmap_aggr_name, step=1.0)
 
         
 with st.container():
