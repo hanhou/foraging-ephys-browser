@@ -13,9 +13,7 @@ from PIL import Image, ImageColor
 import streamlit.components.v1 as components
 import streamlit_nested_layout
 
-
-import plotly.express as px
-import plotly.graph_objects as go
+from streamlit_util import filter_dataframe, aggrid_interactive_table_units
 
 
 if_profile = False
@@ -26,7 +24,6 @@ if if_profile:
     p.start()
 
 
-from streamlit_util import *
 # from pipeline import experiment, ephys, lab, psth_foraging, report, foraging_analysis
 # from pipeline.plot import foraging_model_plot
 
@@ -46,7 +43,26 @@ st.set_page_config(layout="wide", page_title='Foraging unit navigator')
 
 if 'selected_points' not in st.session_state:
     st.session_state['selected_points'] = []
+
     
+@st.experimental_memo(ttl=24*3600)
+def load_data(tables=['sessions']):
+    df = {}
+    for table in tables:
+        file_name = cache_folder + f'{table}.pkl'
+        if use_s3:
+            with fs.open(file_name) as f:
+                df[table] = pd.read_pickle(f)
+        else:
+            df[table] = pd.read_pickle(file_name)
+        
+    return df
+
+    
+# ---- Start here ---
+df = load_data(['sessions', 'ephys_units', 'aoi'])
+st.session_state.df = df
+st.session_state.aoi_color_mapping = {area: f'rgb({",".join(col.astype(str))})' for area, col in zip(df['aoi'].index, df['aoi'].rgb)}
 
 @st.experimental_memo(ttl=24*3600)
 def get_fig_unit_all_in_one(key):
@@ -74,19 +90,6 @@ def get_fig_unit_all_in_one(key):
 #     'ephys_units': fetch_ephys_units,
 # }
 
-@st.experimental_memo(ttl=24*3600)
-def load_data(tables=['sessions']):
-    df = {}
-    for table in tables:
-        file_name = cache_folder + f'{table}.pkl'
-        if use_s3:
-            with fs.open(file_name) as f:
-                df[table] = pd.read_pickle(f)
-        else:
-            df[table] = pd.read_pickle(file_name)
-        
-    return df
-
 
 @st.experimental_memo(ttl=24*3600)
 def get_fig(key):
@@ -96,24 +99,22 @@ def get_fig(key):
     foraging_model_plot.plot_session_fitted_choice(key, ax=ax, remove_ignored=False, first_n=2)
     return fig   
 
+def add_unit_filter():
+    with st.expander("Unit filter", expanded=True):   
+        st.session_state.df_unit_filtered = filter_dataframe(df=st.session_state.df['ephys_units'])
+    st.markdown(f"### {len(st.session_state.df_unit_filtered)} units filtered")
 
 
 # ------- Layout starts here -------- #    
-
-
-
 def app():
     st.markdown('## Foraging Unit Browser')
        
-    df = load_data(['sessions', 'ephys_units', 'aoi'])
-    st.session_state.df = df
-    aoi_color_mapping = {area: f'rgb({",".join(col.astype(str))})' for area, col in zip(df['aoi'].index, df['aoi'].rgb)}
           
     with st.container():
         # col1, col2 = st.columns([1.5, 1], gap='small')
         # with col1:
         # -- 1. unit dataframe --
-        st.markdown('### Filtering units in this table has global effect (select one line to plot unit below)')
+        st.markdown('### Filtered units')
         
         # aggrid_outputs = aggrid_interactive_table_units(df=df['ephys_units'])
         # st.session_state.df_unit_filtered = aggrid_outputs['data']
@@ -121,16 +122,26 @@ def app():
         container_filtered_frame = st.container()
         
     with st.sidebar:
-        st.session_state.df_unit_filtered = filter_dataframe(df=df['ephys_units'])
-        st.write(f"{len(st.session_state.df_unit_filtered)} units filtered" + ' (data fetched from S3)' if use_s3 else '(data fetched from local)')
-        st.write(st.session_state.select_area_of_interest_cache)
-        st.write(st.session_state.select_area_of_interest)
-
+        add_unit_filter()
         
-try:
-    app()
-except Exception as e:
-    pass
+    st.session_state.aggrid_outputs = aggrid_interactive_table_units(df=st.session_state.df_unit_filtered)
+
+    # st.dataframe(st.session_state.df_unit_filtered, use_container_width=True, height=1000)
+    
+    # Some global variables
+    st.session_state.scatter_stats_names = [keys for keys in st.session_state.df['ephys_units'].keys() if any([s in keys for s in ['dQ', 'sumQ', 'contraQ', 'ipsiQ', 'rpe', 'ccf', 'firing_rate']])]
+    st.session_state.ccf_stat_names = [n for n in st.session_state.scatter_stats_names if 'ccf' not in n]
+
+
+    container_unit_all_in_one = st.container()
+    
+    with container_unit_all_in_one:
+        # with st.expander("Expand to see all-in-one plot for selected unit", expanded=True):
+        if len(st.session_state.aggrid_outputs['selected_rows']) == 1:
+            unit_fig = get_fig_unit_all_in_one(st.session_state.aggrid_outputs['selected_rows'][0])
+            st.image(unit_fig, output_format='PNG', width=3000)
+
+app()
             
 if if_profile:    
     p.stop()

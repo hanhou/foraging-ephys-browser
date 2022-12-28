@@ -9,6 +9,7 @@ import streamlit as st
 from streamlit_plotly_events import plotly_events
 from streamlit_util import *
 
+from Home import add_unit_filter
 
 import nrrd
 
@@ -337,8 +338,6 @@ def ccf_x_to_AP(ccf_x):
 def ccf_z_to_ML(ccf_z):
     return round(ccf_z- 5700)/1000
 
-scatter_stats_names = [keys for keys in st.session_state.df['ephys_units'].keys() if any([s in keys for s in ['dQ', 'sumQ', 'contraQ', 'ipsiQ', 'rpe', 'ccf', 'firing_rate']])]
-ccf_stat_names = [n for n in scatter_stats_names if 'ccf' not in n]
 
 def _ccf_heatmap_available_aggr_funcs(value_to_map):
     if 'pure' not in value_to_map:
@@ -363,15 +362,13 @@ def _ccf_heatmap_get_aggr_func(heatmap_aggr_name, value_to_map):
     return heatmap_aggr_func_mapping[heatmap_aggr_name][0], heatmap_aggr_func_mapping[heatmap_aggr_name][1]
 
 
-with st.sidebar:       
-    st.session_state.df_unit_filtered = filter_dataframe(df=st.session_state.df['ephys_units'])
-    st.write(st.session_state.select_area_of_interest_cache)
-    st.write(st.session_state.select_area_of_interest)   
-             
+with st.sidebar:    
+    add_unit_filter()
+
     with st.expander("CCF view settings", expanded=True):
         
         if_flip = st.checkbox("Flip to left hemisphere", value=True)
-        value_to_map = st.selectbox("Plot which?", ccf_stat_names, index=ccf_stat_names.index('t_dQ_iti'))
+        value_to_map = st.selectbox("Plot which?", st.session_state.ccf_stat_names, index=st.session_state.ccf_stat_names.index('t_dQ_iti'))
         if_take_abs = st.checkbox("Use abs()?", value=False)
         
         if_ccf_plot_scatter = st.checkbox("Draw units", value=True)        
@@ -398,8 +395,8 @@ with st.sidebar:
 col_coronal, col_saggital = st.columns((1, 1.8))
 with col_coronal:
     ccf_z = st.slider("Saggital slice at (ccf_z)", min_value=600, max_value=5700 if if_flip else 10800, 
-                                       value=st.session_state.ccf_z if 'ccf_z' in st.session_state else 5100, 
-                                       step=100)       # whole ccf @ 25um [528x320x456] 
+                                    value=st.session_state.ccf_z if 'ccf_z' in st.session_state else 5100, 
+                                    step=100)       # whole ccf @ 25um [528x320x456] 
     saggital_thickness = st.slider("Slice thickness (LR)", min_value= 100, max_value=5000, step=50, value=700)
     
     container_coronal = st.container()
@@ -431,11 +428,3 @@ with container_saggital:
     selected_points_slice = plotly_events(fig, click_event=True, hover_event=False, select_event=False,
                                             override_height=1500)
     # st.plotly_chart(fig, use_container_width=True)
-
-st.session_state.ccf_z = ccf_z
-ccf_z
-
-try:
-    app()
-except Exception as e:
-    pass
