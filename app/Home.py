@@ -64,7 +64,7 @@ df = load_data(['sessions', 'ephys_units', 'aoi'])
 st.session_state.df = df
 st.session_state.aoi_color_mapping = {area: f'rgb({",".join(col.astype(str))})' for area, col in zip(df['aoi'].index, df['aoi'].rgb)}
 
-@st.experimental_memo(ttl=24*3600)
+# @st.experimental_memo(ttl=24*3600)
 def get_fig_unit_all_in_one(key):
     sess_date_str = datetime.strftime(datetime.strptime(key['session_date'], '%Y-%m-%dT%H:%M:%S'), '%Y%m%d')
     
