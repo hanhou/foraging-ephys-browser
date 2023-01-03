@@ -3,6 +3,16 @@ import pandas as pd
 import streamlit as st
 from st_aggrid import AgGrid, GridOptionsBuilder
 from st_aggrid.shared import GridUpdateMode, ColumnsAutoSizeMode, DataReturnMode
+from pandas.api.types import (
+    is_categorical_dtype,
+    is_datetime64_any_dtype,
+    is_numeric_dtype,
+    is_object_dtype,
+)
+import matplotlib.pyplot as plt
+import plotly.express as px
+import numpy as np
+import plotly.graph_objects as go
 
 custom_css = {
 ".ag-root.ag-unselectable.ag-layout-normal": {"font-size": "15px !important",
@@ -81,8 +91,6 @@ def aggrid_interactive_table_units(df: pd.DataFrame):
     options.configure_columns(column_names=['subject_id', 'electrode'], hide=True)
  
 
-
-     
     # options.configure_column(field="water_restriction_number", header_name="subject", 
     #                          children=[dict(field="water_restriction_number", rowGroup=True),
     #                                    dict(field="session")])
@@ -101,3 +109,161 @@ def aggrid_interactive_table_units(df: pd.DataFrame):
     )
 
     return selection
+
+def cache_widget(field, clear=None):
+    st.session_state[f'{field}_cache'] = st.session_state[field]
+    
+    # Clear cache if needed
+    if clear:
+        if clear in st.session_state: del st.session_state[clear]
+        
+# def dec_cache_widget_state(widget, ):
+
+
+def filter_dataframe(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Adds a UI on top of a dataframe to let viewers filter columns
+
+    Args:
+        df (pd.DataFrame): Original dataframe
+
+    Returns:
+        pd.DataFrame: Filtered dataframe
+    """
+    
+    # modify = st.checkbox("Add filters")
+
+    # if not modify:
+    #     return df
+
+    df = df.copy()
+
+    # Try to convert datetimes into a standard format (datetime, no timezone)
+    for col in df.columns:
+        if is_object_dtype(df[col]):
+            try:
+                df[col] = pd.to_datetime(df[col])
+            except Exception:
+                pass
+
+        if is_datetime64_any_dtype(df[col]):
+            df[col] = df[col].dt.tz_localize(None)
+
+    modification_container = st.container()
+    
+    with modification_container:
+        st.markdown(f"Add filters")
+        to_filter_columns = st.multiselect("Filter dataframe on", df.columns,
+                                                            label_visibility='collapsed',
+                                                            default=st.session_state.to_filter_columns_cache 
+                                                                    if 'to_filter_columns_cache' in st.session_state
+                                                                    else ['area_of_interest'],
+                                                            key='to_filter_columns',
+                                                            on_change=cache_widget,
+                                                            args=['to_filter_columns'])
+        for column in to_filter_columns:
+            left, right = st.columns((1, 20))
+            # Treat columns with < 10 unique values as categorical
+            if is_categorical_dtype(df[column]) or df[column].nunique() < 30:
+                right.markdown(f"Filter for **{column}**")
+                selected = right.multiselect(
+                    f"Values for {column}",
+                    df[column].unique(),
+                    label_visibility='collapsed',
+                    default=st.session_state[f'select_{column}_cache']
+                            if f'select_{column}_cache' in st.session_state
+                            else list(df[column].unique()),
+                    key=f'select_{column}',
+                    on_change=cache_widget,
+                    args=[f'select_{column}']
+                )
+                df = df[df[column].isin(selected)]
+                
+            elif is_numeric_dtype(df[column]):
+                
+                # fig = px.histogram(df[column], nbins=100, )
+                # fig.update_layout(showlegend=False, height=50)
+                # st.plotly_chart(fig)
+                # counts, bins = np.histogram(df[column], bins=100)
+                # st.bar_chart(pd.DataFrame(
+                #                 {'x': bins[1:], 'y': counts},
+                #                 ),
+                #                 x='x', y='y')
+                
+                with right:
+                    col1, col2 = st.columns((3, 1))
+                    col1.markdown(f"Filter for **{column}**")
+                    if float(df[column].min()) >= 0: 
+                        show_log = col2.checkbox('log 10', 
+                                                 value=st.session_state[f'if_log_{column}_cache']
+                                                       if f'if_log_{column}_cache' in st.session_state
+                                                       else False,
+                                                 key=f'if_log_{column}',
+                                                 on_change=cache_widget,
+                                                 args=[f'if_log_{column}'],
+                                                 kwargs={'clear': f'select_{column}_cache'}  # If show_log is changed, clear select cache
+                                                 )
+                    else:
+                        show_log = 0
+                        
+                    if show_log:
+                        x = np.log10(df[column] + 1e-6)  # Cutoff at 1e-5
+                    else:
+                        x = df[column]               
+                        
+                    _min = float(x.min())
+                    _max = float(x.max())
+                    step = (_max - _min) / 100
+
+                    c_hist = st.container()  # Histogram
+                    
+                    user_num_input = st.slider(
+                        f"Values for {column}",
+                        label_visibility='collapsed',
+                        min_value=_min,
+                        max_value=_max,
+                        value= st.session_state[f'select_{column}_cache']
+                                if f'select_{column}_cache' in st.session_state
+                                else (_min, _max),
+                        step=step,
+                        key=f'select_{column}',
+                        on_change=cache_widget,
+                        args=[f'select_{column}']
+                    )
+                    
+                    with c_hist:
+                        
+                        counts, bins = np.histogram(x, bins=100)
+                        
+                        fig = px.bar(x=bins[1:], y=counts)
+                        fig.add_vrect(x0=user_num_input[0], x1=user_num_input[1], fillcolor='red', opacity=0.1, line_width=0)
+                        fig.update_layout(showlegend=False, height=100, 
+                                          yaxis=dict(visible=False),
+                                          xaxis=dict(title=f'log 10 ({column})' if show_log else column,
+                                                     range=(_min, _max)),
+                                          margin=dict(l=0, r=0, t=0, b=0))
+                        st.plotly_chart(fig, use_container_width=True)
+
+                    df = df[x.between(*user_num_input)]
+                
+            elif is_datetime64_any_dtype(df[column]):
+                user_date_input = right.date_input(
+                    f"Values for {column}",
+                    value=(
+                        df[column].min(),
+                        df[column].max(),
+                    ),
+                )
+                if len(user_date_input) == 2:
+                    user_date_input = tuple(map(pd.to_datetime, user_date_input))
+                    start_date, end_date = user_date_input
+                    df = df.loc[df[column].between(start_date, end_date)]
+            else:
+                
+                user_text_input = right.text_input(
+                    f"Substring or regex in {column}",
+                )
+                if user_text_input:
+                    df = df[df[column].astype(str).str.contains(user_text_input)]
+
+    return df
