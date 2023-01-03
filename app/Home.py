@@ -129,7 +129,9 @@ def app():
     # st.dataframe(st.session_state.df_unit_filtered, use_container_width=True, height=1000)
     
     # Some global variables
-    st.session_state.scatter_stats_names = [keys for keys in st.session_state.df['ephys_units'].keys() if any([s in keys for s in ['dQ', 'sumQ', 'contraQ', 'ipsiQ', 'rpe', 'ccf', 'firing_rate']])]
+    st.session_state.scatter_stats_names = [keys for keys in st.session_state.df['ephys_units'].keys() if any([s in keys for s in 
+                                                                                                               ['dQ', 'sumQ', 'contraQ', 'ipsiQ', 'rpe', 'ccf', 'firing_rate',
+                                                                                                                'poisson']])]
     st.session_state.ccf_stat_names = [n for n in st.session_state.scatter_stats_names if 'ccf' not in n]
 
 

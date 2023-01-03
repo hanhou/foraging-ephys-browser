@@ -231,6 +231,39 @@ def plot_polar(df_unit_filtered, x_name, y_name, polar_method, n_bins, if_errorb
     return fig
 
 
+def add_scatter_return_selected(data, x_name, y_name):
+    if len(data):
+        if_use_ccf_color = st.checkbox("Use ccf color", value=True)
+        fig = plot_scatter(data, x_name=x_name, y_name=y_name, 
+                            if_use_ccf_color=if_use_ccf_color, 
+                            sign_level=st.session_state.sign_level)
+        
+        if len(st.session_state.selected_points):
+            fig.add_trace(go.Scatter(x=[st.session_state.selected_points[0]['x']], 
+                                y=[st.session_state.selected_points[0]['y']], 
+                                mode='markers',
+                                marker_symbol='star',
+                                marker_size=15,
+                                marker_color='black',
+                                name='selected'))
+        
+        # Select other Plotly events by specifying kwargs
+        selected_points_scatter = plotly_events(fig, click_event=True, hover_event=False, select_event=True,
+                                                override_height=800, override_width=800)
+    return selected_points_scatter
+
+def add_xy_selector():
+    with st.expander("Select axes", expanded=True):
+        with st.form("axis_selection"):
+            col3, col4 = st.columns([1, 1])
+            with col3:
+                x_name = st.selectbox("x axis", st.session_state.scatter_stats_names, index=st.session_state.scatter_stats_names.index('t_dQ_iti'))
+            with col4:
+                y_name = st.selectbox("y axis", st.session_state.scatter_stats_names, index=st.session_state.scatter_stats_names.index('t_sumQ_iti'))
+            st.form_submit_button("update axes")
+    return x_name, y_name
+
+
 def _to_theta_r(x, y):
     return np.arctan2(y, x), np.sqrt(x**2 + y**2)
     
@@ -243,36 +276,12 @@ def app():
                                                       disabled=False, step=1.0) #'significant' not in heatmap_aggr_name, step=1.0)
    
     # -- axes selector --
-    with st.expander("Select axes", expanded=False):
-        with st.form("axis_selection"):
-            col3, col4 = st.columns([1, 1])
-            with col3:
-                x_name = st.selectbox("x axis", st.session_state.scatter_stats_names, index=st.session_state.scatter_stats_names.index('t_dQ_iti'))
-            with col4:
-                y_name = st.selectbox("y axis", st.session_state.scatter_stats_names, index=st.session_state.scatter_stats_names.index('t_sumQ_iti'))
-            st.form_submit_button("update axes")
+    x_name, y_name = add_xy_selector()
 
     # -- scatter --
     col1, col2 = st.columns((1, 1))
     with col1:  # Raw scatter
-        if len(st.session_state.df_unit_filtered):
-            if_use_ccf_color = st.checkbox("Use ccf color", value=True)
-            fig = plot_scatter(st.session_state.df_unit_filtered, x_name=x_name, y_name=y_name, 
-                               if_use_ccf_color=if_use_ccf_color, 
-                               sign_level=st.session_state.sign_level)
-            
-            if len(st.session_state.selected_points):
-                fig.add_trace(go.Scatter(x=[st.session_state.selected_points[0]['x']], 
-                                    y=[st.session_state.selected_points[0]['y']], 
-                                    mode='markers',
-                                    marker_symbol='star',
-                                    marker_size=15,
-                                    marker_color='black',
-                                    name='selected'))
-            
-            # Select other Plotly events by specifying kwargs
-            selected_points_scatter = plotly_events(fig, click_event=True, hover_event=False, select_event=False,
-                                                    override_height=800, override_width=800)
+        selected_points_scatter = add_scatter_return_selected(st.session_state.df_unit_filtered, x_name, y_name)
                     
         
     with col2: # Polar distribution
