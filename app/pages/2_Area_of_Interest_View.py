@@ -246,6 +246,15 @@ def add_scatter_return_selected(data, x_name, y_name):
                                 marker_size=15,
                                 marker_color='black',
                                 name='selected'))
+            
+        # if 'selected_points_scatter' in st.session_state and len(st.session_state.selected_points_scatter):
+        #     fig.add_trace(go.Scatter(x=[pt['x'] for pt in st.session_state.selected_points_scatter], 
+        #                         y=[pt['y'] for pt in st.session_state.selected_points_scatter], 
+        #                         mode='markers',
+        #                         marker_symbol='star',
+        #                         marker_size=15,
+        #                         marker_color='black',
+        #                         name='selected'))            
         
         # Select other Plotly events by specifying kwargs
         selected_points_scatter = plotly_events(fig, click_event=True, hover_event=False, select_event=True,

@@ -88,7 +88,6 @@ def draw_selected_units(selected_points, draw_types, x_name, y_name):
     for i, xy in enumerate(selected_points):
         key = st.session_state.df_unit_filtered.query(f'{x_name} == {xy["x"]} '
                                                   f'and {y_name} == {xy["y"]}')
-        
         if len(key):
             for draw_type in draw_types:
                 img = draw_func_mapping[draw_type](key.iloc[0])
@@ -99,6 +98,7 @@ def draw_selected_units(selected_points, draw_types, x_name, y_name):
         else:
             cols[i % 3].markdown('Unit not found')
             
+        cols[i % 3].markdown("---")
         my_bar.progress(int((i + 1) / len(selected_points) * 100))
     pass
 
