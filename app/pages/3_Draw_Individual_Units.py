@@ -4,7 +4,6 @@ import plotly.graph_objects as go
 import numpy as np
 
 from streamlit_util import filter_dataframe, aggrid_interactive_table_units
-from streamlit_plotly_events import plotly_events
 from datetime import datetime 
 
 import importlib

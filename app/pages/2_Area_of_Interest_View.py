@@ -262,7 +262,7 @@ def add_scatter_return_selected(data, x_name, y_name, x_abs=False, y_abs=False):
         
         # Select other Plotly events by specifying kwargs
         selected_points_scatter = plotly_events(fig, click_event=True, hover_event=False, select_event=True,
-                                                override_height=800, override_width=800)
+                                                override_height=800, override_width=800, key='unit_scatter')
     return selected_points_scatter
 
 def add_xy_selector():

@@ -58,12 +58,6 @@ def load_data(tables=['sessions']):
         
     return df
 
-    
-# ---- Start here ---
-df = load_data(['sessions', 'ephys_units', 'aoi'])
-st.session_state.df = df
-st.session_state.aoi_color_mapping = {area: f'rgb({",".join(col.astype(str))})' for area, col in zip(df['aoi'].index, df['aoi'].rgb)}
-
 # @st.experimental_memo(ttl=24*3600)
 def get_fig_unit_all_in_one(key):
     sess_date_str = datetime.strftime(datetime.strptime(key['session_date'], '%Y-%m-%dT%H:%M:%S'), '%Y%m%d')
@@ -106,6 +100,17 @@ def add_unit_filter():
 
 
 # ------- Layout starts here -------- #    
+def init():
+    df = load_data(['sessions', 'ephys_units', 'aoi'])
+    st.session_state.df = df
+    st.session_state.aoi_color_mapping = {area: f'rgb({",".join(col.astype(str))})' for area, col in zip(df['aoi'].index, df['aoi'].rgb)}
+    # Some global variables
+    st.session_state.scatter_stats_names = [keys for keys in st.session_state.df['ephys_units'].keys() if any([s in keys for s in 
+                                                                                                                ['dQ', 'sumQ', 'contraQ', 'ipsiQ', 'rpe', 'ccf', 'firing_rate',
+                                                                                                                'poisson']])]
+    st.session_state.ccf_stat_names = [n for n in st.session_state.scatter_stats_names if 'ccf' not in n]
+
+
 def app():
     st.markdown('## Foraging Unit Browser')
        
@@ -127,13 +132,6 @@ def app():
     st.session_state.aggrid_outputs = aggrid_interactive_table_units(df=st.session_state.df_unit_filtered)
 
     # st.dataframe(st.session_state.df_unit_filtered, use_container_width=True, height=1000)
-    
-    # Some global variables
-    st.session_state.scatter_stats_names = [keys for keys in st.session_state.df['ephys_units'].keys() if any([s in keys for s in 
-                                                                                                               ['dQ', 'sumQ', 'contraQ', 'ipsiQ', 'rpe', 'ccf', 'firing_rate',
-                                                                                                                'poisson']])]
-    st.session_state.ccf_stat_names = [n for n in st.session_state.scatter_stats_names if 'ccf' not in n]
-
 
     container_unit_all_in_one = st.container()
     
@@ -143,7 +141,11 @@ def app():
             unit_fig = get_fig_unit_all_in_one(st.session_state.aggrid_outputs['selected_rows'][0])
             st.image(unit_fig, output_format='PNG', width=3000)
 
+if 'df' not in st.session_state: 
+    init()
+    
 app()
+
             
 if if_profile:    
     p.stop()
