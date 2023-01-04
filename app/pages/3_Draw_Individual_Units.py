@@ -79,15 +79,16 @@ def get_fig_unit_drift_metric(key):
 draw_func_mapping = {'psth': get_fig_unit_psth_only,
                      'drift metrics': get_fig_unit_drift_metric}
 
-def draw_selected_units(selected_points, draw_types, x_name, y_name):
+def draw_selected_units(selected_points, draw_types, x_name, y_name, x_abs, y_abs):
     st.write(f'Draw unit plot for selected {len(selected_points)} units')
     my_bar = st.columns((1, 7))[0].progress(0)
 
     cols = st.columns((1, 1, 1))
     
     for i, xy in enumerate(selected_points):
-        key = st.session_state.df_unit_filtered.query(f'{x_name} == {xy["x"]} '
-                                                  f'and {y_name} == {xy["y"]}')
+        q_x = f'abs({x_name}) == {xy["x"]}' if x_abs else f'{x_name} == {xy["x"]}'
+        q_y = f'abs({y_name}) == {xy["y"]}' if y_abs else f'{y_name} == {xy["y"]}'
+        key = st.session_state.df_unit_filtered.query(f'{q_x} and {q_y}')
         if len(key):
             for draw_type in draw_types:
                 img = draw_func_mapping[draw_type](key.iloc[0])
@@ -104,14 +105,14 @@ def draw_selected_units(selected_points, draw_types, x_name, y_name):
 
 
 def add_xy_selector():
-    with st.form("axis_selection"):
-        col3, col4 = st.columns([1, 1])
-        with col3:
-            x_name = st.selectbox("x axis", st.session_state.scatter_stats_names, index=st.session_state.scatter_stats_names.index('poisson_p_choice_outcome'))
-        with col4:
-            y_name = st.selectbox("y axis", st.session_state.scatter_stats_names, index=st.session_state.scatter_stats_names.index('t_dQ_iti'))
-        st.form_submit_button("update axes")
-    return x_name, y_name
+    col3, col4 = st.columns([1, 1])
+    with col3:
+        x_name = st.selectbox("x axis", st.session_state.scatter_stats_names, index=st.session_state.scatter_stats_names.index('poisson_p_choice_outcome'))
+        x_abs = st.checkbox(label='abs(x)?')
+    with col4:
+        y_name = st.selectbox("y axis", st.session_state.scatter_stats_names, index=st.session_state.scatter_stats_names.index('t_dQ_iti'))
+        y_abs = st.checkbox(label='abs(y)?')
+    return x_name, y_name, x_abs, y_abs
 
 # --------------------------------
 
@@ -126,14 +127,14 @@ st.session_state.aggrid_outputs = aggrid_interactive_table_units(df=st.session_s
 col1, col2 = st.columns((1, 1))
 
 with col2:
-    x_name, y_name = add_xy_selector()
+    x_name, y_name, x_abs, y_abs = add_xy_selector()
     draw_types = st.multiselect('Which plot(s) to draw?', ['psth', 'drift metrics'], default=['psth'])
 with col1:
-    selected_points_scatter = package_aoi.add_scatter_return_selected(st.session_state.df_unit_filtered, x_name, y_name)
+    selected_points_scatter = package_aoi.add_scatter_return_selected(st.session_state.df_unit_filtered, x_name, y_name, x_abs, y_abs)
 
 # fig = plot_drift_metric_scatter(st.session_state.df_unit_filtered)
 # selected_points_scatter = plotly_events(fig, click_event=True, hover_event=False, select_event=True, 
 #                                         override_height=800, override_width=800)
 
 
-draw_selected_units(selected_points_scatter, draw_types, x_name, y_name)
+draw_selected_units(selected_points_scatter, draw_types, x_name, y_name, x_abs, y_abs)

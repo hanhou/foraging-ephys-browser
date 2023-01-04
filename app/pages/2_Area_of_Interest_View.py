@@ -20,7 +20,7 @@ sig_prop_color_mapping =  {'dQ': 'darkviolet',
                             'rpe': 'gray'}
 
 @st.experimental_memo(ttl=24*3600)
-def plot_scatter(data, x_name='dQ_iti', y_name='sumQ_iti', if_use_ccf_color=False, sign_level=2.57):
+def plot_scatter(data, x_name='dQ_iti', y_name='sumQ_iti', if_use_ccf_color=False, sign_level=2.57, x_abs=False, y_abs=False):
     
     fig = go.Figure()
     
@@ -29,8 +29,8 @@ def plot_scatter(data, x_name='dQ_iti', y_name='sumQ_iti', if_use_ccf_color=Fals
             continue
         
         this_aoi = data.query(f'area_of_interest == "{aoi}"')
-        fig.add_trace(go.Scatter(x=this_aoi[x_name], 
-                                 y=this_aoi[y_name],
+        fig.add_trace(go.Scatter(x=np.abs(this_aoi[x_name]) if x_abs else this_aoi[x_name], 
+                                 y=np.abs(this_aoi[y_name]) if y_abs else this_aoi[y_name],
                                  mode="markers",
                                  marker_color=st.session_state.aoi_color_mapping[aoi] if if_use_ccf_color else None,
                                  name=aoi))
@@ -42,10 +42,12 @@ def plot_scatter(data, x_name='dQ_iti', y_name='sumQ_iti', if_use_ccf_color=Fals
     
     if 't_' in x_name:
         fig.add_vline(x=sign_level, line_width=1, line_dash="dash", line_color="black")
-        fig.add_vline(x=-sign_level, line_width=1, line_dash="dash", line_color="black")
+        if not x_abs: 
+            fig.add_vline(x=-sign_level, line_width=1, line_dash="dash", line_color="black")
     if 't_' in y_name:
         fig.add_hline(y=sign_level, line_width=1, line_dash="dash", line_color="black")
-        fig.add_hline(y=-sign_level, line_width=1, line_dash="dash", line_color="black")
+        if not y_abs:
+            fig.add_hline(y=-sign_level, line_width=1, line_dash="dash", line_color="black")
         
     # fig.update_xaxes(range=[-40, 40])
     # fig.update_yaxes(range=[-40, 40])
@@ -231,16 +233,18 @@ def plot_polar(df_unit_filtered, x_name, y_name, polar_method, n_bins, if_errorb
     return fig
 
 
-def add_scatter_return_selected(data, x_name, y_name):
+def add_scatter_return_selected(data, x_name, y_name, x_abs=False, y_abs=False):
     if len(data):
         if_use_ccf_color = st.checkbox("Use ccf color", value=True)
         fig = plot_scatter(data, x_name=x_name, y_name=y_name, 
                             if_use_ccf_color=if_use_ccf_color, 
-                            sign_level=st.session_state.sign_level)
+                            sign_level=st.session_state.sign_level,
+                            x_abs=x_abs,
+                            y_abs=y_abs)
         
         if len(st.session_state.selected_points):
             fig.add_trace(go.Scatter(x=[st.session_state.selected_points[0]['x']], 
-                                y=[st.session_state.selected_points[0]['y']], 
+                                     y=[st.session_state.selected_points[0]['y']], 
                                 mode='markers',
                                 marker_symbol='star',
                                 marker_size=15,
@@ -348,6 +352,5 @@ def app():
         st.session_state.selected_points = selected_points_scatter
         st.experimental_rerun()
         
-        
-        
-app()
+if __name__ == 'main':       
+    app()
