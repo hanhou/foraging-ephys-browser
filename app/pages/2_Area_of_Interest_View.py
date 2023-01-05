@@ -352,5 +352,4 @@ def app():
         st.session_state.selected_points = selected_points_scatter
         st.experimental_rerun()
         
-if __name__ == 'main':       
-    app()
+app()
