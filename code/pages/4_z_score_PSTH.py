@@ -21,19 +21,6 @@ from Home import add_unit_filter
 export_folder = 'aind-behavior-data/Han/ephys/export/'
 fs = s3fs.S3FileSystem(anon=False)
 
-z_tuning_mappper = {'dQ_go_cue_before_2': dict(align_to='go_cue', time_win=[-2, 0], latent_name='relative_action_value_lr', latent_bins=np.linspace(-3, 3, 20), if_z_score_latent=True, latent_variable_offset=-1),
-                    'dQ_iti_start_before_1': dict(align_to='iti_start', time_win=[-1, 0], latent_name='relative_action_value_lr', latent_bins=np.linspace(-3, 3, 20), if_z_score_latent=True),
-                    'dQ_iti_start_after_2': dict(align_to='iti_start', time_win=[0, 2], latent_name='relative_action_value_lr', latent_bins=np.linspace(-3, 3, 20), if_z_score_latent=True),
-                    
-                    'sumQ_go_cue_before_2': dict(align_to='go_cue', time_win=[-2, 0], latent_name='total_action_value', latent_bins=np.linspace(-3, 3, 20), if_z_score_latent=True, latent_variable_offset=-1),
-                    'sumQ_iti_start_before_1': dict(align_to='iti_start', time_win=[-1, 0], latent_name='total_action_value', latent_bins=np.linspace(-3, 3, 20), if_z_score_latent=True),
-                    'sumQ_iti_start_after_2': dict(align_to='iti_start', time_win=[0, 2], latent_name='total_action_value', latent_bins=np.linspace(-3, 3, 20), if_z_score_latent=True),
-                    
-                    'rpe_go_cue_before_2': dict(align_to='go_cue', time_win=[-2, 0], latent_name='rpe', latent_bins=np.linspace(-1, 1, 20), if_z_score_latent=False, latent_variable_offset=-1),
-                    'rpe_choice_after_2': dict(align_to='choice', time_win=[0, 2], latent_name='rpe', latent_bins=np.linspace(-1, 1, 20), if_z_score_latent=False),                    
-                    'rpe_iti_start_before_1': dict(align_to='iti_start', time_win=[-1, 0], latent_name='rpe', latent_bins=np.linspace(-1, 1, 20), if_z_score_latent=False),
-                    'rpe_iti_start_after_2': dict(align_to='iti_start', time_win=[0, 2], latent_name='rpe', latent_bins=np.linspace(-1, 1, 20), if_z_score_latent=False),
-                   }
 
 
 @st.experimental_memo(ttl=24*3600)
@@ -57,7 +44,7 @@ def plot_population_tuning(df_all, meta, if_flip_tuning=True, significance_level
         df_this_aoi = df_all[df_all.area_of_interest == aoi]
         
         if choice_group == 'all_choice':
-            if meta['latent_name'] == 'rpe' or if_flip_tuning:
+            if if_flip_tuning:
                 tuning_mean, tuning_sem, selected_tuning = compute_group_tuning(df_this_aoi, 
                                                                                 unit_keys=None, #df.index[df.r > 0], 
                                                                                 if_z_score_firing=True,
@@ -124,6 +111,10 @@ def plot_population_tuning(df_all, meta, if_flip_tuning=True, significance_level
     
     return fig
     
+    
+if 'df' not in st.session_state: 
+    from Home import init
+    init()
 
 with st.sidebar:
     add_unit_filter()
@@ -131,11 +122,32 @@ with st.sidebar:
                                                 value=st.session_state.sign_level if 'sign_level' in st.session_state else 2.57, 
                                                 disabled=False, step=1.0) #'significant' not in heatmap_aggr_name, step=1.0)
 
-cols = st.columns([1, 1, 5])
-z_method = cols[0].selectbox('Z-score latent variable and time epoch', z_tuning_mappper.keys(), index=0)
-sign_only = cols[1].checkbox('significant only', False)
+# z_tuning_mappper = {'dQ_go_cue_before_2': dict(align_to='go_cue', time_win=[-2, 0], latent_name='relative_action_value_lr', latent_variable_offset=-1),
+#                     'dQ_iti_start_before_1': dict(align_to='iti_start', time_win=[-1, 0], latent_name='relative_action_value_lr', ),
+#                     'dQ_iti_start_after_2': dict(align_to='iti_start', time_win=[0, 2], latent_name='relative_action_value_lr'),
+                    
+#                     'sumQ_go_cue_before_2': dict(align_to='go_cue', time_win=[-2, 0], latent_name='total_action_value', latent_variable_offset=-1),
+#                     'sumQ_iti_start_before_1': dict(align_to='iti_start', time_win=[-1, 0], latent_name='total_action_value',),
+#                     'sumQ_iti_start_after_2': dict(align_to='iti_start', time_win=[0, 2], latent_name='total_action_value'),
+                    
+#                     'rpe_go_cue_before_2': dict(align_to='go_cue', time_win=[-2, 0], latent_name='rpe', latent_variable_offset=-1),
+#                     'rpe_choice_after_2': dict(align_to='choice', time_win=[0, 2], latent_name='rpe', ),                    
+#                     'rpe_iti_start_before_1': dict(align_to='iti_start', time_win=[-1, 0], latent_name='rpe',),
+#                     'rpe_iti_start_after_2': dict(align_to='iti_start', time_win=[0, 2], latent_name='rpe', ),
+#                    }
 
-df_this_setting_all_session, z_score_meta = load_z_score(f'z_score_all_{z_method}.pkl')
+time_epochs = ['go_cue_before_2', 'iti_start_before_1', 'iti_start_after_2'] 
+
+cols = st.columns([1, 1, 1, 7])
+latent_name = cols[0].selectbox('latent variable', ['dQ', 'sumQ', 'rpe'], index=0)
+time_epoch = cols[1].selectbox('time epoch', time_epochs + ['choice_after_2']
+                                             if latent_name == 'rpe' else time_epochs,
+                                             index=3 if latent_name == 'rpe' else 0)
+
+if_z_score_x = cols[2].checkbox('z score latent variable', False if latent_name == 'rpe' else True)
+sign_only = cols[2].checkbox('significant only', True)
+
+df_this_setting_all_session, z_score_meta = load_z_score(f'z_score_all_{latent_name}_{time_epoch}_{"z_score_x" if if_z_score_x else "raw_x"}.pkl')
 
 unit_keys = ['subject_id', 'session', 'ins', 'unit']
 df_aoi = st.session_state.df_unit_filtered[['area_of_interest'] + unit_keys].set_index(unit_keys
@@ -147,40 +159,39 @@ df_this_setting_all_session = df_this_setting_all_session.join(df_aoi)
 # Flipped
 cols = st.columns([1, 1, 1])
 with cols[0]:
-    st.markdown('### All choices')
+    st.markdown('### All choices, flipped')
     fig = plot_population_tuning(df_this_setting_all_session, 
                                  z_score_meta,
                                  significance_level=0.05 if sign_only else None,
-                                 if_flip_tuning=False if 'rpe' in z_method else True, 
+                                 if_flip_tuning=True, 
                                  choice_group='all_choice')
-    selected = plotly_events(fig, click_event=True, hover_event=False, select_event=True, override_height=700, override_width=700)
+    selected = plotly_events(fig, click_event=False, hover_event=False, select_event=False, override_height=700, override_width=700)
 
-if 'rpe' not in z_method:
-    with cols[1]:
-        st.markdown('### Separated by the previous choice')
-        fig = plot_population_tuning(df_this_setting_all_session, 
+with cols[1]:
+    st.markdown('### Separated by the previous choice')
+    fig = plot_population_tuning(df_this_setting_all_session, 
+                                z_score_meta, 
+                                significance_level=0.05 if sign_only else None,
+                                if_flip_tuning=True, 
+                                choice_group='previous_choice')
+    selected = plotly_events(fig, click_event=False, hover_event=False, select_event=False, override_height=700, override_width=700)
+
+with cols[2]:
+    st.markdown('### Separated by the next choice')
+    fig = plot_population_tuning(df_this_setting_all_session, 
+                                z_score_meta, 
+                                significance_level=0.05 if sign_only else None,
+                                if_flip_tuning=True, 
+                                choice_group='next_choice')
+    selected = plotly_events(fig, click_event=False, hover_event=False, select_event=False, override_height=700, override_width=700)
+
+# Non-flipped, left and right separately
+cols = st.columns([1, 1, 1])
+with cols[0]:
+    st.markdown('### All choices, not flipped')
+    fig = plot_population_tuning(df_this_setting_all_session, 
                                     z_score_meta, 
+                                    if_flip_tuning=False, 
                                     significance_level=0.05 if sign_only else None,
-                                    if_flip_tuning=False if 'rpe' in z_method else True, 
-                                    choice_group='previous_choice')
-        selected = plotly_events(fig, click_event=True, hover_event=False, select_event=True, override_height=700, override_width=700)
-
-    with cols[2]:
-        st.markdown('### Separated by the next choice')
-        fig = plot_population_tuning(df_this_setting_all_session, 
-                                    z_score_meta, 
-                                    significance_level=0.05 if sign_only else None,
-                                    if_flip_tuning=False if 'rpe' in z_method else True, 
-                                    choice_group='next_choice')
-        selected = plotly_events(fig, click_event=True, hover_event=False, select_event=True, override_height=700, override_width=700)
-
-    # Non-flipped, left and right separately
-    cols = st.columns([1, 1, 1])
-    with cols[0]:
-        st.markdown('### All choices, not flipped')
-        fig = plot_population_tuning(df_this_setting_all_session, 
-                                     z_score_meta, 
-                                     if_flip_tuning=False, 
-                                     significance_level=0.05 if sign_only else None,
-                                     choice_group='all_choice')
-        selected = plotly_events(fig, click_event=True, hover_event=False, select_event=True, override_height=700, override_width=750)
+                                    choice_group='all_choice')
+    selected = plotly_events(fig, click_event=False, hover_event=False, select_event=False, override_height=700, override_width=750)

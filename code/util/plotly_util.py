@@ -4,6 +4,12 @@ import plotly.graph_objects as go
 def add_plotly_errorbar(x, y, err, col, fig, alpha=0.2, name='', legend_group=None, **kwargs):
     if legend_group is None:
         legend_group = f'group_{name}'
+        
+    valid_y = y.notna()
+    y = y[valid_y]
+    x = x[valid_y]
+    err = err[valid_y]
+    err[~err.notna()] = 0
     
     fig.add_trace(go.Scattergl(    
         x=x, 
