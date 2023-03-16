@@ -24,7 +24,14 @@ def compute_group_tuning(df_unit_latent_bin_firing,
     if significance_level is not None:
         unit_keys = unit_keys[df_unit_latent_bin_firing.loc[unit_keys].p < significance_level]
     
-    selected_tuning = df_unit_latent_bin_firing.loc[unit_keys, choice_group]['mean']
+    # If select trials according to next/previous choice, the choice should be actually pref and non-pref of individual neuron, not right and left 
+    selected_tuning = df_unit_latent_bin_firing.loc[unit_keys, choice_group]['mean']  # Assuming all units have right pref
+    
+    if choice_group != 'all_choice':
+        to_flip = df_unit_latent_bin_firing['r'] < 0   # Select units that are opposite our assumption
+        choice_group_flipped = choice_group[:-1] + list((set(['r', 'l']) - {choice_group[-1]}))[0]
+        selected_tuning.loc[to_flip] = df_unit_latent_bin_firing.loc[unit_keys, choice_group_flipped]['mean']
+
     z_mean = df_unit_latent_bin_firing.loc[unit_keys, 'z_mean']
     z_std = df_unit_latent_bin_firing.loc[unit_keys, 'z_std']
     

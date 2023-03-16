@@ -101,7 +101,7 @@ def plot_population_tuning(df_all, meta, if_flip_tuning=True, significance_level
                 tuning_mean, tuning_sem, selected_tuning = compute_group_tuning(df_this_aoi, 
                                                                                 unit_keys=None, #df.index[df.r > 0], 
                                                                                 if_z_score_firing=True,
-                                                                                significance_level=None,
+                                                                                significance_level=significance_level,
                                                                                 if_flip_tuning=if_flip_tuning,
                                                                                 choice_group=f'{choice_group}_{choice}')                    
                 add_plotly_errorbar(x=tuning_mean.index, 
@@ -155,26 +155,26 @@ with cols[0]:
                                  choice_group='all_choice')
     selected = plotly_events(fig, click_event=True, hover_event=False, select_event=True, override_height=700, override_width=700)
 
-with cols[1]:
-    st.markdown('### Separated by the previous choice')
-    fig = plot_population_tuning(df_this_setting_all_session, 
-                                 z_score_meta, 
-                                 significance_level=0.05 if sign_only else None,
-                                 if_flip_tuning=False if 'rpe' in z_method else True, 
-                                 choice_group='previous_choice')
-    selected = plotly_events(fig, click_event=True, hover_event=False, select_event=True, override_height=700, override_width=700)
+if 'rpe' not in z_method:
+    with cols[1]:
+        st.markdown('### Separated by the previous choice')
+        fig = plot_population_tuning(df_this_setting_all_session, 
+                                    z_score_meta, 
+                                    significance_level=0.05 if sign_only else None,
+                                    if_flip_tuning=False if 'rpe' in z_method else True, 
+                                    choice_group='previous_choice')
+        selected = plotly_events(fig, click_event=True, hover_event=False, select_event=True, override_height=700, override_width=700)
 
-with cols[2]:
-    st.markdown('### Separated by the next choice')
-    fig = plot_population_tuning(df_this_setting_all_session, 
-                                 z_score_meta, 
-                                 significance_level=0.05 if sign_only else None,
-                                 if_flip_tuning=False if 'rpe' in z_method else True, 
-                                 choice_group='next_choice')
-    selected = plotly_events(fig, click_event=True, hover_event=False, select_event=True, override_height=700, override_width=700)
+    with cols[2]:
+        st.markdown('### Separated by the next choice')
+        fig = plot_population_tuning(df_this_setting_all_session, 
+                                    z_score_meta, 
+                                    significance_level=0.05 if sign_only else None,
+                                    if_flip_tuning=False if 'rpe' in z_method else True, 
+                                    choice_group='next_choice')
+        selected = plotly_events(fig, click_event=True, hover_event=False, select_event=True, override_height=700, override_width=700)
 
-# Non-flipped, left and right separately
-if 'rpe' not in z_method:   # For rpe, it is non-flipped
+    # Non-flipped, left and right separately
     cols = st.columns([1, 1, 1])
     with cols[0]:
         st.markdown('### All choices, not flipped')
