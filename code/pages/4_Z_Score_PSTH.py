@@ -15,13 +15,15 @@ from streamlit_util import *
 from util.z_score_psth import compute_group_tuning
 from util.plotly_util import add_plotly_errorbar
 
-from Home import add_unit_filter
+from Home import add_unit_filter, init
 
 
 export_folder = 'aind-behavior-data/Han/ephys/export/psth/'
 fs = s3fs.S3FileSystem(anon=False)
 
 
+if 'df' not in st.session_state: 
+    init()
 
 @st.cache_data(ttl=24*3600)
 def load_z_score(file_name):

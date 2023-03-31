@@ -9,11 +9,14 @@ import streamlit as st
 from streamlit_plotly_events import plotly_events
 from streamlit_util import *
 
-from Home import add_unit_filter
+from Home import add_unit_filter, init
 
 import nrrd
 
 
+if 'df' not in st.session_state: 
+    init()
+    
 CCF_RESOLUTION = 25
 
 @st.cache_data(ttl=24*3600)

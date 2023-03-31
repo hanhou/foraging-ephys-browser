@@ -4,9 +4,10 @@ import plotly.graph_objects as go
 import numpy as np
 
 from streamlit_plotly_events import plotly_events
-from Home import add_unit_filter, get_fig_unit_all_in_one
+from Home import add_unit_filter, get_fig_unit_all_in_one, init
 
-
+if 'df' not in st.session_state: 
+    init()
 
 pure_unit_color_mapping =  {'pure_dQ': 'darkviolet',
                             'pure_sumQ': 'deepskyblue',

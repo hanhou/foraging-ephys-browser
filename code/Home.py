@@ -39,8 +39,6 @@ else:
     fs = s3fs.S3FileSystem(anon=False)
     use_s3 = True
 
-st.set_page_config(layout="wide", page_title='Foraging unit navigator')
-
 if 'selected_points' not in st.session_state:
     st.session_state['selected_points'] = []
 
@@ -101,6 +99,8 @@ def add_unit_filter():
 
 # ------- Layout starts here -------- #    
 def init():
+    st.set_page_config(layout="wide", page_title='Foraging unit navigator')
+
     df = load_data(['sessions', 'ephys_units', 'aoi', 'df_period_linear_fit_all'])
     st.session_state.df = df
     st.session_state.aoi_color_mapping = {area: f'rgb({",".join(col.astype(str))})' for area, col in zip(df['aoi'].index, df['aoi'].rgb)}
@@ -144,7 +144,8 @@ def app():
 if 'df' not in st.session_state: 
     init()
     
-app()
+if __name__ == '__main__':
+    app()
 
             
 if if_profile:    

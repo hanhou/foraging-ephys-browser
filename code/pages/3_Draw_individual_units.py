@@ -13,13 +13,15 @@ package_aoi = importlib.import_module('.2_Area_of_interest_view', package='pages
 import s3fs
 from PIL import Image, ImageColor
 
-from Home import add_unit_filter
+from Home import add_unit_filter, init
 
 
 cache_fig_drift_metrics_folder = 'aind-behavior-data/Han/ephys/report/unit_drift_metrics/'
 cache_fig_psth_folder = 'aind-behavior-data/Han/ephys/report/all_units/'
 fs = s3fs.S3FileSystem(anon=False)
 
+if 'df' not in st.session_state: 
+    init()
 
 def plot_drift_metric_scatter(data):
     fig = go.Figure()
