@@ -21,7 +21,7 @@ CCF_RESOLUTION = 25
 
 @st.cache_data(ttl=24*3600)
 def _get_min_max():
-    x_gamma_all = np.abs(st.session_state.df['ephys_units'][value_to_map] ** size_gamma)
+    x_gamma_all = np.abs(st.session_state.df['df_ephys_units'][value_to_map] ** size_gamma)
     return np.percentile(x_gamma_all, 5), np.percentile(x_gamma_all, 95)
 
 def _size_mapping(x):

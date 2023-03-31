@@ -79,7 +79,7 @@ def get_fig_unit_all_in_one(key):
 
 # table_mapping = {
 #     'sessions': fetch_sessions,
-#     'ephys_units': fetch_ephys_units,
+#     'df_ephys_units': fetch_df_ephys_units,
 # }
 
 
@@ -93,7 +93,7 @@ def get_fig(key):
 
 def add_unit_filter():
     with st.expander("Unit filter", expanded=True):   
-        st.session_state.df_unit_filtered = filter_dataframe(df=st.session_state.df['ephys_units'])
+        st.session_state.df_unit_filtered = filter_dataframe(df=st.session_state.df['df_ephys_units'])
     st.markdown(f"### {len(st.session_state.df_unit_filtered)} units filtered")
 
 
@@ -101,11 +101,11 @@ def add_unit_filter():
 def init():
     st.set_page_config(layout="wide", page_title='Foraging unit navigator')
 
-    df = load_data(['sessions', 'ephys_units', 'aoi', 'df_period_linear_fit_all'])
+    df = load_data(['sessions', 'df_ephys_units', 'aoi', 'df_period_linear_fit_all'])
     st.session_state.df = df
     st.session_state.aoi_color_mapping = {area: f'rgb({",".join(col.astype(str))})' for area, col in zip(df['aoi'].index, df['aoi'].rgb)}
     # Some global variables
-    st.session_state.scatter_stats_names = [keys for keys in st.session_state.df['ephys_units'].keys() if any([s in keys for s in 
+    st.session_state.scatter_stats_names = [keys for keys in st.session_state.df['df_ephys_units'].keys() if any([s in keys for s in 
                                                                                                                 ['dQ', 'sumQ', 'contraQ', 'ipsiQ', 'rpe', 'ccf', 'firing_rate',
                                                                                                                 'poisson']])]
     st.session_state.ccf_stat_names = [n for n in st.session_state.scatter_stats_names if 'ccf' not in n]
@@ -121,7 +121,7 @@ def app():
         # -- 1. unit dataframe --
         st.markdown('### Filtered units')
         
-        # aggrid_outputs = aggrid_interactive_table_units(df=df['ephys_units'])
+        # aggrid_outputs = aggrid_interactive_table_units(df=df['df_ephys_units'])
         # st.session_state.df_unit_filtered = aggrid_outputs['data']
         
         container_filtered_frame = st.container()

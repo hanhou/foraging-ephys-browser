@@ -39,10 +39,16 @@ all_models = ['dQ, sumQ, rpe',
 model_color_map = {model:color for model, color in zip(all_models, px.colors.qualitative.Plotly)}
 
 all_periods = ['before_2', 'delay', 'go_1.2', 'go_to_end', 'iti_all', 'iti_first_2', 'iti_last_2']
-
 period_mapping = {'before_2': 'Before GO (2s)', 'delay': 'Delay', 'go_1.2': 'After GO (1.2s)', 'go_to_end': 'GO to END', 
                   'iti_all': 'ITI (all)', 'iti_first_2': 'ITI (first 2s)', 'iti_last_2': 'ITI (last 2s)'}
-para_mapping = {'relative_action_value_ic': 'dQ', 'total_action_value': 'sumQ', 'rpe': 'rpe'}
+
+all_paras = [var for var in df_period_linear_fit_all.columns.get_level_values('var_name').unique() if var !='']
+para_mapping = {'relative_action_value_ic': 'dQ', 'total_action_value': 'sumQ', 'rpe': 'rpe',
+                'choice_ic': 'Choice (this)', 'choice_ic_next': 'Choice (next)',
+                'trial_normalized': 'Trial number', 
+                **{f'firing_{n}_back': f'Firing {n} back' for n in range(1, 11)},
+                'contra_action_value': 'contraQ', 'ipsi_action_value': 'ipsiQ'
+                }
 
 @st.cache_data(ttl=3600*24)
 def plot_model_comparison():
@@ -55,66 +61,7 @@ def plot_model_comparison():
     return fig
 
 @st.cache_data(ttl=3600*24)
-def t_value_Q_rpe_all(df_period_linear_fit_all, period):
-    paras = ['relative_action_value_ic', 'total_action_value', 'rpe']
-    models = [m for m in all_models if 'dQ' in m]
-
-    fig = make_subplots(rows=1, cols=3, 
-                        subplot_titles=[para_mapping[para] for para in paras],
-                        shared_yaxes=True,
-                        x_title='abs(t)',
-                        y_title=f'CDF (n={len(df_period_linear_fit_all)})',
-                        )
-
-    t_value = np.linspace(0, 10, 100)
-    ys = 1 - 2 * norm.sf(t_value)
-
-    for col, para in enumerate(paras):
-        df = df_period_linear_fit_all.loc[:, (period, models, "t", para)
-                                         ].droplevel(axis=1, level=0).stack([0, 2]).reset_index()
-        df['abs(t)'] = df.t.abs()
-
-        for i, model in enumerate(models):
-            hist, x = np.histogram(df.query(f'multi_linear_model == "{model}"')['abs(t)'], 
-                                   bins=100)
-            cdf = np.cumsum(hist) / np.sum(hist)
-            fig.add_trace(go.Scattergl(x=(x[:-1] + x[1:])/2, 
-                                    y=cdf,
-                                    mode='lines',
-                                    line=dict(color=model_color_map[model],
-                                            width=5 if model in ('dQ, sumQ, rpe', 'dQ, sumQ, rpe, C*2, R*5, t') else 3),
-                                    name=model,
-                                    legendgroup=model,
-                                    showlegend=col==1,
-                                    ),
-                        row=1, col=col+1)
-        
-        # t-value
-        fig.add_trace(go.Scatter(x=t_value,
-                                y=ys,
-                                mode='lines',
-                                name='Type I error',
-                                legendgroup='err',
-                                showlegend=col==1,
-                                line=dict(color='gray', dash='dash'),
-                                ),
-                    row=1, col=col+1)
-
-        fig.add_vline(x=2.0, line_color='gray', line_dash='dash',
-                    row=1, col=col+1)
-
-
-    # fig.update_traces(line_width=3)
-    fig.update_xaxes(range=[0, 10])
-    fig.update_layout(width=1500, height=500,
-                    font_size=17, hovermode='closest',
-                    )
-    fig.update_annotations(font_size=20)
-    return fig
-
-@st.cache_data(ttl=3600*24)
-def t_value_Q_rpe_different_period(df_period_linear_fit_all, periods):
-    paras = ['relative_action_value_ic', 'total_action_value', 'rpe']
+def plot_t_distribution(df_period_linear_fit, periods, paras):
     models = [m for m in all_models if 'dQ' in m]
 
     fig = make_subplots(rows=len(paras), cols=len(periods), 
@@ -126,32 +73,35 @@ def t_value_Q_rpe_different_period(df_period_linear_fit_all, periods):
                         )
 
     t_value = np.linspace(0, 10, 100)
-    ys = 1 - 2 * norm.sf(t_value)
+    type_1_error = 2 * norm.sf(t_value)
 
     for row, para in enumerate(paras):
         for col, period in enumerate(periods):
-            df = df_period_linear_fit_all.loc[:, (period, models, "t", para)
+            df = df_period_linear_fit.loc[:, (period, models, "t", para)
                                             ].droplevel(axis=1, level=0).stack([0, 2]).reset_index()
             df['abs(t)'] = df.t.abs()
 
             for i, model in enumerate(models):
                 hist, x = np.histogram(df.query(f'multi_linear_model == "{model}"')['abs(t)'], 
                                     bins=100)
-                cdf = np.cumsum(hist) / np.sum(hist)
+                sign_ratio = 1 - np.cumsum(hist) / np.sum(hist)
                 fig.add_trace(go.Scattergl(x=(x[:-1] + x[1:])/2, 
-                                        y=cdf,
+                                        y=sign_ratio,
                                         mode='lines',
                                         line=dict(color=model_color_map[model],
                                                 width=5 if model in ('dQ, sumQ, rpe', 'dQ, sumQ, rpe, C*2, R*5, t') else 3),
                                         name=model,
                                         legendgroup=model,
                                         showlegend=col==0 and row ==0,
+                                        hovertemplate=
+                                            '%s<br>' % (model) +
+                                            '%{y:%2.1f} units, t > %{x:.2f}<br><extra></extra>',
                                         ),
                             row=row+1, col=col+1)
 
             # t-value
             fig.add_trace(go.Scatter(x=t_value,
-                                    y=ys,
+                                    y=type_1_error,
                                     mode='lines',
                                     name='Type I error',
                                     legendgroup='err',
@@ -169,7 +119,7 @@ def t_value_Q_rpe_different_period(df_period_linear_fit_all, periods):
     # fig.update_traces(line_width=3)
     fig.update_xaxes(range=[0, 10])
     fig.update_yaxes(range=[0, 1.1])
-    fig.update_layout(width=2000, height=800,
+    fig.update_layout(width=2000, height=250 * len(paras),
                     font_size=17, hovermode='closest',
                     )
     fig.update_annotations(font_size=20)
@@ -202,5 +152,32 @@ if st.checkbox('do it', False):
 
 # 2. t value of dQ and sum Q, different epochs
 st.markdown('### t-values, all units, different epoches and models')
-fig = t_value_Q_rpe_different_period(df_period_linear_fit_all, all_periods)
-plotly_events(fig, override_height=fig.layout.height*1.1, override_width=fig.layout.width, click_event=False)
+paras = ['relative_action_value_ic', 'total_action_value', 'rpe',
+         'choice_ic', 'choice_ic_next', 'trial_normalized', 'firing_1_back']
+
+st.markdown(
+"""
+<style>
+    .stMultiSelect [data-baseweb=select] span{
+        max-width: 1000px;
+    }
+</style>""",
+unsafe_allow_html=True,
+)
+
+cols = st.columns([1, 1])
+aois = cols[0].multiselect('Areas to include', st.session_state.aoi_color_mapping.keys(), st.session_state.aoi_color_mapping)
+paras = cols[1].multiselect('Variables to draw', all_paras, ['relative_action_value_ic', 'total_action_value', 'rpe',
+                                                        'choice_ic', 'choice_ic_next'])
+
+if aois and paras:
+    df_aoi = st.session_state.df['df_ephys_units'].set_index(unit_key_names)
+    df_period_linear_fit = df_period_linear_fit_all.loc[df_aoi.query('area_of_interest in @aois').index, :]
+    st.markdown(f'#### N = {len(df_period_linear_fit)}')
+    fig = plot_t_distribution(df_period_linear_fit=df_period_linear_fit, 
+                             periods=all_periods, 
+                             paras=paras)
+
+    plotly_events(fig, override_height=fig.layout.height*1.1, override_width=fig.layout.width, click_event=False)
+    
+    
