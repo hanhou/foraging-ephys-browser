@@ -45,7 +45,7 @@ if 'selected_points' not in st.session_state:
     st.session_state['selected_points'] = []
 
     
-@st.experimental_memo(ttl=24*3600)
+@st.cache_data(ttl=24*3600)
 def load_data(tables=['sessions']):
     df = {}
     for table in tables:
@@ -58,7 +58,7 @@ def load_data(tables=['sessions']):
         
     return df
 
-# @st.experimental_memo(ttl=24*3600)
+# @st.cache_data(ttl=24*3600)
 def get_fig_unit_all_in_one(key):
     sess_date_str = datetime.strftime(datetime.strptime(key['session_date'], '%Y-%m-%dT%H:%M:%S'), '%Y%m%d')
     
@@ -85,7 +85,7 @@ def get_fig_unit_all_in_one(key):
 # }
 
 
-@st.experimental_memo(ttl=24*3600)
+@st.cache_data(ttl=24*3600)
 def get_fig(key):
     fig = plt.figure(figsize=(8, 3), constrained_layout=True)
     ax = fig.subplots(1,1)
@@ -101,7 +101,7 @@ def add_unit_filter():
 
 # ------- Layout starts here -------- #    
 def init():
-    df = load_data(['sessions', 'ephys_units', 'aoi'])
+    df = load_data(['sessions', 'ephys_units', 'aoi', 'df_period_linear_fit_all'])
     st.session_state.df = df
     st.session_state.aoi_color_mapping = {area: f'rgb({",".join(col.astype(str))})' for area, col in zip(df['aoi'].index, df['aoi'].rgb)}
     # Some global variables

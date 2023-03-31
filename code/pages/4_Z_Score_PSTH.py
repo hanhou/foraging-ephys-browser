@@ -18,12 +18,12 @@ from util.plotly_util import add_plotly_errorbar
 from Home import add_unit_filter
 
 
-export_folder = 'aind-behavior-data/Han/ephys/export/'
+export_folder = 'aind-behavior-data/Han/ephys/export/psth/'
 fs = s3fs.S3FileSystem(anon=False)
 
 
 
-@st.experimental_memo(ttl=24*3600)
+@st.cache_data(ttl=24*3600)
 def load_z_score(file_name):
     with fs.open(export_folder + file_name) as f:
         df = pd.read_pickle(f)
@@ -32,7 +32,7 @@ def load_z_score(file_name):
     return df, meta
 
 
-@st.experimental_memo(ttl=24*3600)
+@st.cache_data(ttl=24*3600)
 def plot_population_tuning(df_all, meta, if_flip_tuning=True, significance_level=None, choice_group='all_choice'):
     
     fig = go.Figure()
@@ -107,6 +107,7 @@ def plot_population_tuning(df_all, meta, if_flip_tuning=True, significance_level
                 xaxis_title=f'{meta["latent_name"]} ({"z-scored" if meta["if_z_score_latent"] else "raw"}, {"flipped" if if_flip_tuning else "not flipped"})',
                 yaxis_title='z-scored firing',
                 title=f'{[meta[x] for x in ["align_to", "time_win"]]}',
+                hovermode='closest',
                 )
     
     return fig
@@ -168,7 +169,7 @@ with cols[0]:
     selected = plotly_events(fig, click_event=False, hover_event=False, select_event=False, override_height=700, override_width=700)
 
 with cols[1]:
-    st.markdown('### Separated by the previous choice')
+    st.markdown('### Splitted by the previous choice')
     fig = plot_population_tuning(df_this_setting_all_session, 
                                 z_score_meta, 
                                 significance_level=0.05 if sign_only else None,
@@ -177,7 +178,7 @@ with cols[1]:
     selected = plotly_events(fig, click_event=False, hover_event=False, select_event=False, override_height=700, override_width=700)
 
 with cols[2]:
-    st.markdown('### Separated by the next choice')
+    st.markdown('### Splitted by the next choice')
     fig = plot_population_tuning(df_this_setting_all_session, 
                                 z_score_meta, 
                                 significance_level=0.05 if sign_only else None,
@@ -188,7 +189,7 @@ with cols[2]:
 # Non-flipped, left and right separately
 cols = st.columns([1, 1, 1])
 with cols[0]:
-    st.markdown('### All choices, not flipped')
+    st.markdown('### All choices, not flipped, splitted by preferred direction')
     fig = plot_population_tuning(df_this_setting_all_session, 
                                     z_score_meta, 
                                     if_flip_tuning=False, 

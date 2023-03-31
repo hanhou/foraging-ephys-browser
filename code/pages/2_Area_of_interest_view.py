@@ -19,7 +19,7 @@ sig_prop_color_mapping =  {'dQ': 'darkviolet',
                             'ipsiQ': 'darkorange',
                             'rpe': 'gray'}
 
-@st.experimental_memo(ttl=24*3600)
+@st.cache_data(ttl=24*3600)
 def plot_scatter(data, x_name='dQ_iti', y_name='sumQ_iti', if_use_ccf_color=False, sign_level=2.57, x_abs=False, y_abs=False):
     
     fig = go.Figure()
@@ -63,7 +63,7 @@ def plot_scatter(data, x_name='dQ_iti', y_name='sumQ_iti', if_use_ccf_color=Fals
     return fig
 
 
-@st.experimental_memo(ttl=24*3600)
+@st.cache_data(ttl=24*3600)
 def plot_unit_class_scatter(x_name, y_name):
 
     fig = go.Figure()
@@ -88,7 +88,7 @@ def plot_unit_class_scatter(x_name, y_name):
             
     return fig
 
-@st.experimental_memo(ttl=24*3600)
+@st.cache_data(ttl=24*3600)
 def plot_unit_pure_class_bar():
     linear_model = '_dQ_sumQ'
     fig = go.Figure()
@@ -122,7 +122,7 @@ def _sig_proportion(ts, sign_level):
     ci_95 = 1.96 * np.sqrt(prop * (1 - prop) / len(ts))
     return prop * 100, ci_95 * 100, len(ts)
 
-@st.experimental_memo(ttl=24*3600)
+@st.cache_data(ttl=24*3600)
 def plot_unit_sig_prop_bar(df_unit_filtered, sign_level):
     
     fig = go.Figure()
@@ -164,7 +164,7 @@ def plot_unit_sig_prop_bar(df_unit_filtered, sign_level):
     return fig
 
 
-@st.experimental_memo(ttl=24*3600)
+@st.cache_data(ttl=24*3600)
 def _polar_histogram(df_this_aoi, x_name, y_name, polar_method, bins, sign_level):
 
     df_sig = df_this_aoi.query(f'abs({x_name}) >= {sign_level} or abs({y_name}) >= {sign_level}')
@@ -181,7 +181,7 @@ def _polar_histogram(df_this_aoi, x_name, y_name, polar_method, bins, sign_level
         return counts / np.sum(counts)  # weighted r
 
 
-@st.experimental_memo(ttl=24*3600)        
+@st.cache_data(ttl=24*3600)        
 def plot_polar(df_unit_filtered, x_name, y_name, polar_method, n_bins, if_errorbar, sign_level):
         
     bins = np.linspace(-np.pi, np.pi, num=n_bins + 1)
@@ -352,4 +352,5 @@ def app():
         st.session_state.selected_points = selected_points_scatter
         st.experimental_rerun()
         
-app()
+if __name__ == '__main__':
+    app()

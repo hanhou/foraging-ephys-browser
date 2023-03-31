@@ -16,7 +16,7 @@ import nrrd
 
 CCF_RESOLUTION = 25
 
-@st.experimental_memo(ttl=24*3600)
+@st.cache_data(ttl=24*3600)
 def _get_min_max():
     x_gamma_all = np.abs(st.session_state.df['ephys_units'][value_to_map] ** size_gamma)
     return np.percentile(x_gamma_all, 5), np.percentile(x_gamma_all, 95)
@@ -50,7 +50,7 @@ def _smooth_heatmap(data, sigma):
 
 
 
-# @st.experimental_memo(ttl=24*3600, experimental_allow_widgets=True, show_spinner=True)
+# @st.cache_data(ttl=24*3600, experimental_allow_widgets=True, show_spinner=True)
 def draw_ccf_annotations(fig, slice, slice_name, edges, message):
     img_str = image_array_to_data_uri(
             slice.astype(np.uint8),
@@ -89,7 +89,7 @@ def draw_ccf_annotations(fig, slice, slice_name, edges, message):
 
 
 
-@st.experimental_memo(persist='disk', show_spinner=False)
+@st.cache_data(persist='disk', show_spinner=False)
 def get_slice(direction, ccf_x):
     
     stack, _, hexcode, regions = load_ccf()
@@ -121,7 +121,7 @@ def get_slice(direction, ccf_x):
     return coronal_slice_color, coronal_slice_name, coronal_edges
 
 
-@st.experimental_memo(ttl=24*3600)
+@st.cache_data(ttl=24*3600)
 def load_ccf():
     nrrd_file = f'./data/annotation_{CCF_RESOLUTION}.nrrd'
     color_file = './data/hexcode.csv'
@@ -167,7 +167,7 @@ def draw_ccf_heatmap(fig, x, y, z, slice_name):
                                             "<br>%s (%s): %%{z}" % (heatmap_aggr_name, value_to_map) + 
                                             "<extra></extra>",
                             customdata=heatmap_region.T,
-                            colorscale='RdBu' if if_bi_directional_heatmap else None, 
+                            colorscale='RdBu' if if_bi_directional_heatmap else 'plasma', 
                             colorbar=dict(orientation="h", len=0.3)
                             ))
     
@@ -181,7 +181,8 @@ def draw_ccf_units(fig, x, y, z, aoi, uid, annot):
                                 mode = 'markers',
                                 marker_size = _size_mapping(z),
                                 # continuous_color_scale = 'RdBu',
-                                marker = {'color': 'rgba(0, 0, 0, 0.8)'},
+                                marker = {'color': 'rgba(0, 0, 0, 0.8)', 
+                                          'line': dict(width=1, color='white')},
                                 hovertemplate= '"%{customdata[0]}"' + 
                                                 '<br>%{text}' +
                                                 '<br>%s = %%{customdata[1]}' % value_to_map +
@@ -198,7 +199,7 @@ def draw_ccf_units(fig, x, y, z, aoi, uid, annot):
                                     mode = 'markers',
                                     marker_size = _size_mapping(abs(z[select_z])),
                                     # continuous_color_scale = 'RdBu',
-                                    marker = {'color': col},
+                                    marker = {'color': col, 'line': dict(width=1, color='white')},
                                     hovertemplate= '"%{customdata[0]}"' + 
                                                     '<br>%{text}' +
                                                     '<br>%s = %%{customdata[1]}' % value_to_map +
@@ -212,7 +213,7 @@ def draw_ccf_units(fig, x, y, z, aoi, uid, annot):
     return
 
 
-# @st.experimental_memo(ttl=24*3600, experimental_allow_widgets=True, show_spinner=True)
+# @st.cache_data(ttl=24*3600, experimental_allow_widgets=True, show_spinner=True)
 def plot_coronal_slice_unit(ccf_x, coronal_slice_thickness, if_flip, *args):
     fig = go.Figure()
 
@@ -266,7 +267,8 @@ def plot_coronal_slice_unit(ccf_x, coronal_slice_thickness, if_flip, *args):
                       yaxis_range=[8000, 0],
                       xaxis_title='ccf_z (left -> right)',
                       yaxis_title='ccf_y (superior -> inferior)',
-                      font=dict(size=20)
+                      font=dict(size=20),
+                      hovermode='closest',
                       )
     
     # st.plotly_chart(fig, use_container_width=True)
@@ -274,7 +276,7 @@ def plot_coronal_slice_unit(ccf_x, coronal_slice_thickness, if_flip, *args):
     return fig
 
 
-# @st.experimental_memo(ttl=24*3600, experimental_allow_widgets=True, show_spinner=True)
+# @st.cache_data(ttl=24*3600, experimental_allow_widgets=True, show_spinner=True)
 def plot_saggital_slice_unit(ccf_z, saggital_slice_thickness, if_flip, *args):
     fig = go.Figure()
 
@@ -321,7 +323,8 @@ def plot_saggital_slice_unit(ccf_z, saggital_slice_thickness, if_flip, *args):
                       yaxis_range=[8000, 0],
                       xaxis_title='ccf_x (anterior -> posterior)',
                       yaxis_title='ccf_y (superior -> inferior)',
-                      font=dict(size=20)
+                      font=dict(size=20),
+                      hovermode='closest',
                       )
     
     fig.add_vline(x=ccf_x, line_width=1)
@@ -419,7 +422,7 @@ with container_coronal:
     fig.add_vline(x=min(ccf_z + saggital_thickness/2, fig.layout.xaxis.range[1]), line_width=1, line_dash='dash')
 
     selected_points_slice = plotly_events(fig, click_event=True, hover_event=False, select_event=False,
-                                        override_height=1500)
+                                          override_height=1500)
     st.write(selected_points_slice)
     # st.plotly_chart(fig, use_container_width=True)
 
