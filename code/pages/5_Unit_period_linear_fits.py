@@ -8,6 +8,7 @@ import plotly.express as px
 from plotly.subplots import make_subplots
 
 from streamlit_plotly_events import plotly_events
+import extra_streamlit_components as stx
 
 from Home import init
 
@@ -39,8 +40,8 @@ all_models = ['dQ, sumQ, rpe',
 model_color_map = {model:color for model, color in zip(all_models, px.colors.qualitative.Plotly)}
 
 all_periods = ['before_2', 'delay', 'go_1.2', 'go_to_end', 'iti_all', 'iti_first_2', 'iti_last_2']
-period_mapping = {'before_2': 'Before GO (2s)', 'delay': 'Delay', 'go_1.2': 'After GO (1.2s)', 'go_to_end': 'GO to END', 
-                  'iti_all': 'ITI (all)', 'iti_first_2': 'ITI (first 2s)', 'iti_last_2': 'ITI (last 2s)'}
+period_mapping = {'before_2': 'Before GO (2s)', 'delay': 'Delay (median 60 ms)', 'go_1.2': 'After GO (1.2s)', 'go_to_end': 'GO to END', 
+                  'iti_all': 'ITI (all, median 3.95s)', 'iti_first_2': 'ITI (first 2s)', 'iti_last_2': 'ITI (last 2s)'}
 
 all_paras = [var for var in df_period_linear_fit_all.columns.get_level_values('var_name').unique() if var !='']
 para_mapping = {'relative_action_value_ic': 'dQ', 'total_action_value': 'sumQ', 'rpe': 'rpe',
@@ -63,6 +64,7 @@ def plot_model_comparison():
 @st.cache_data(ttl=3600*24)
 def plot_t_distribution(df_period_linear_fit, periods, paras):
     models = [m for m in all_models if 'dQ' in m]
+    model_highlight = ('dQ, sumQ, rpe', 'dQ, sumQ, rpe, C*2, R*5, t')
 
     fig = make_subplots(rows=len(paras), cols=len(periods), 
                         subplot_titles=[period_mapping[period] for period in periods],
@@ -89,13 +91,14 @@ def plot_t_distribution(df_period_linear_fit, periods, paras):
                                         y=sign_ratio,
                                         mode='lines',
                                         line=dict(color=model_color_map[model],
-                                                width=5 if model in ('dQ, sumQ, rpe', 'dQ, sumQ, rpe, C*2, R*5, t') else 3),
+                                                width=5 if model in model_highlight else 3),
                                         name=model,
                                         legendgroup=model,
                                         showlegend=col==0 and row ==0,
                                         hovertemplate=
                                             '%s<br>' % (model) +
                                             '%{y:%2.1f} units, t > %{x:.2f}<br><extra></extra>',
+                                        visible=True if model in model_highlight else 'legendonly',
                                         ),
                             row=row+1, col=col+1)
 
@@ -119,7 +122,7 @@ def plot_t_distribution(df_period_linear_fit, periods, paras):
     # fig.update_traces(line_width=3)
     fig.update_xaxes(range=[0, 10])
     fig.update_yaxes(range=[0, 1.1])
-    fig.update_layout(width=2000, height=250 * len(paras),
+    fig.update_layout(width=min(2000, 2000/6*len(periods)), height=250 * len(paras),
                     font_size=17, hovermode='closest',
                     )
     fig.update_annotations(font_size=20)
@@ -128,8 +131,16 @@ def plot_t_distribution(df_period_linear_fit, periods, paras):
 
 
 # --- Model comparison ---
-st.markdown('### Model comparison, all units')
-if st.checkbox('do it', False):
+
+chosen_id = stx.tab_bar(data=[
+                            stx.TabBarItemData(id="tab1", title="1. Model comparison", description=""),
+                            stx.TabBarItemData(id="tab2", title="2. t-distribution, compare models", description=""),
+                            stx.TabBarItemData(id="tab3", title="3. t-distribution, compare areas", description=""),
+                            ], 
+                        default="tab2")
+
+if chosen_id == 'tab1':
+    st.markdown('#### Model comparison, all units')
     fig = plot_model_comparison()
 
     fig.update_layout(width=2000, height=700, 
@@ -142,42 +153,51 @@ if st.checkbox('do it', False):
     fig.update_xaxes(categoryorder='array', categoryarray=all_models)
     st.plotly_chart(fig)
 
-# --- Compare (dQ, sumQ, rpe) vs (full mode: C*2, R*5, t) ---
+elif chosen_id == 'tab2':
 
-# 1. t value of dQ and sum Q
-# st.markdown('### t-values of (dQ, sumQ, rpe), from different models')
-# period = st.columns([1, 6])[0].selectbox('period', all_periods, index=all_periods.index('iti_all'))
-# fig = t_value_Q_rpe_all(df_period_linear_fit_all, period=period)
-# plotly_events(fig, override_height=fig.layout.height*1.1, override_width=fig.layout.width, click_event=False)
+    # --- Compare (dQ, sumQ, rpe) vs (full mode: C*2, R*5, t) ---
 
-# 2. t value of dQ and sum Q, different epochs
-st.markdown('### t-values, all units, different epoches and models')
-paras = ['relative_action_value_ic', 'total_action_value', 'rpe',
-         'choice_ic', 'choice_ic_next', 'trial_normalized', 'firing_1_back']
+    # 1. t value of dQ and sum Q
+    # st.markdown('### t-values of (dQ, sumQ, rpe), from different models')
+    # period = st.columns([1, 6])[0].selectbox('period', all_periods, index=all_periods.index('iti_all'))
+    # fig = t_value_Q_rpe_all(df_period_linear_fit_all, period=period)
+    # plotly_events(fig, override_height=fig.layout.height*1.1, override_width=fig.layout.width, click_event=False)
 
-st.markdown(
-"""
-<style>
-    .stMultiSelect [data-baseweb=select] span{
-        max-width: 1000px;
-    }
-</style>""",
-unsafe_allow_html=True,
-)
+    # 2. t value of dQ and sum Q, different epochs
+    st.markdown('#### t-values, all units, different epoches and models')
+    paras = ['relative_action_value_ic', 'total_action_value', 'rpe',
+            'choice_ic', 'choice_ic_next', 'trial_normalized', 'firing_1_back']
 
-cols = st.columns([1, 1])
-aois = cols[0].multiselect('Areas to include', st.session_state.aoi_color_mapping.keys(), st.session_state.aoi_color_mapping)
-paras = cols[1].multiselect('Variables to draw', all_paras, ['relative_action_value_ic', 'total_action_value', 'rpe',
-                                                        'choice_ic', 'choice_ic_next'])
+    st.markdown(
+    """
+    <style>
+        .stMultiSelect [data-baseweb=select] span{
+            max-width: 1000px;
+        }
+    </style>""",
+    unsafe_allow_html=True,
+    )
 
-if aois and paras:
-    df_aoi = st.session_state.df['df_ephys_units'].set_index(unit_key_names)
-    df_period_linear_fit = df_period_linear_fit_all.loc[df_aoi.query('area_of_interest in @aois').index, :]
-    st.markdown(f'#### N = {len(df_period_linear_fit)}')
-    fig = plot_t_distribution(df_period_linear_fit=df_period_linear_fit, 
-                             periods=all_periods, 
-                             paras=paras)
+    cols = st.columns([1, 1, 1])
+    aois = cols[0].multiselect('Areas to include', st.session_state.aoi_color_mapping.keys(), st.session_state.aoi_color_mapping)
+    paras = cols[1].multiselect('Variables to draw', 
+                                [para_mapping[p] for p in all_paras], 
+                                [para_mapping[p] for p in ['relative_action_value_ic', 'total_action_value', 'rpe',
+                                                           'choice_ic', 'choice_ic_next', 'trial_normalized', 'firing_1_back']])
+    periods = cols[2].multiselect('Periods to draw', 
+                                  [period_mapping[p] for p in all_periods],
+                                  [period_mapping[p] for p in all_periods if p!= 'delay'])
 
-    plotly_events(fig, override_height=fig.layout.height*1.1, override_width=fig.layout.width, click_event=False)
-    
+    if aois and paras:
+        df_aoi = st.session_state.df['df_ephys_units'].set_index(unit_key_names)
+        df_period_linear_fit = df_period_linear_fit_all.loc[df_aoi.query('area_of_interest in @aois').index, :]
+        st.markdown(f'#### N = {len(df_period_linear_fit)}')
+        fig = plot_t_distribution(df_period_linear_fit=df_period_linear_fit, 
+                                periods=[p for p in all_periods if period_mapping[p] in periods], 
+                                paras=[p for p in all_paras if para_mapping[p] in paras])
+
+        plotly_events(fig, override_height=fig.layout.height*1.1, override_width=fig.layout.width, click_event=False)
+
+elif chosen_id == 'tab3':
+    pass
     
