@@ -10,13 +10,20 @@ from plotly.subplots import make_subplots
 from streamlit_plotly_events import plotly_events
 import extra_streamlit_components as stx
 
-from Home import init
+from Home import add_unit_filter, init
 
 if 'df' not in st.session_state: 
     init()
     
+with st.sidebar:    
+    add_unit_filter()
+    
 # Prepare df
 df_period_linear_fit_all = st.session_state.df['df_period_linear_fit_all']
+unit_key_names = ['subject_id', 'session', 'insertion_number', 'unit']
+
+# Filter df
+df_period_linear_fit_all = df_period_linear_fit_all.loc[st.session_state.df_unit_filtered.set_index(unit_key_names).index, :]
 
 
 plotly_font = lambda x: dict(xaxis_tickfont_size=x,
@@ -26,7 +33,6 @@ plotly_font = lambda x: dict(xaxis_tickfont_size=x,
                             legend_font_size=x,
                             legend_title_font_size=x,)
 
-unit_key_names = ['subject_id', 'session', 'insertion_number', 'unit']
 
 all_models = ['dQ, sumQ, rpe', 
                'dQ, sumQ, rpe, C*2', 
@@ -210,7 +216,7 @@ elif chosen_id == 'tab2':
                                   [period_mapping[p] for p in all_periods if p!= 'delay'])
 
     if aois and paras and periods:
-        df_aoi = st.session_state.df['df_ephys_units'].set_index(unit_key_names)
+        df_aoi = st.session_state.df_unit_filtered.set_index(unit_key_names)
         df_period_linear_fit = df_period_linear_fit_all.loc[df_aoi.query('area_of_interest in @aois').index, :]
         st.markdown(f'#### N = {len(df_period_linear_fit)}')
         fig = plot_t_distribution(df_period_linear_fit=df_period_linear_fit, 
