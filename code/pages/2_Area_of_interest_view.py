@@ -117,53 +117,6 @@ def plot_unit_pure_class_bar():
                       )    
     return fig
 
-# Add proportion of pure units
-def _sig_proportion(ts, sign_level):
-    prop = np.sum(np.abs(ts) >= sign_level) / len(ts)
-    ci_95 = 1.96 * np.sqrt(prop * (1 - prop) / len(ts))
-    return prop * 100, ci_95 * 100, len(ts)
-
-@st.cache_data(ttl=24*3600)
-def plot_unit_sig_prop_bar(df_unit_filtered, sign_level):
-    
-    fig = go.Figure()
-    period = 'iti'    
-        
-    for stat_name, color in sig_prop_color_mapping.items():
-        col = f't_{stat_name}_{period}'
-        
-        prop_ci = df_unit_filtered.groupby('area_of_interest')[col].agg(lambda x: _sig_proportion(x, sign_level))
-        filtered_aoi = [col for col in st.session_state.df['aoi'].index if col in prop_ci] # Sort according to st.session_state.df['aoi'].index
-        prop_ci = prop_ci.reindex(filtered_aoi)
-        prop = [x[0] for x in prop_ci.values] 
-        err = [x[1] for x in prop_ci.values] 
-        ns =  [x[2] for x in prop_ci.values] 
-
-        fig.add_trace(go.Bar( 
-                            name=f'{stat_name}, {period}',
-                            x=filtered_aoi,
-                            y=prop,
-                            error_y=dict(type='data', array=err),
-                            hovertemplate='%%{x}, %s, %s' % (stat_name, period) + 
-                                          '<br>%{y:.1f} ± %{customdata[0]:.1f} % (95% CI)' + 
-                                          '<br>n = %{customdata[1]} <extra></extra>',
-                            customdata=np.stack((err, ns), axis=-1),
-                            marker=dict(
-                                        color=color,
-                                        line_color=color,
-                                        line_width=3,
-                                        pattern_shape='/', 
-                                        pattern_fillmode="replace",
-                                        ),
-                            ))
-    
-    fig.update_layout(barmode='group', 
-                      height=800,
-                      yaxis_title='% sig. units (+/- 95% CI)',
-                      font=dict(size=20)
-                      )    
-    return fig
-
 
 @st.cache_data(ttl=24*3600)
 def _polar_histogram(df_this_aoi, x_name, y_name, polar_method, bins, sign_level):
@@ -320,11 +273,6 @@ def app():
         pass
     
                 
-    # -- bar plot unit sig proportion
-    st.markdown(f'### Proportion of significant neurons for each variable (abs(t) > {st.session_state.sign_level}), errorbar = binomial 95% CI')
-    fig = plot_unit_sig_prop_bar(st.session_state.df_unit_filtered, st.session_state.sign_level)
-    st.plotly_chart(fig, use_container_width=True)
-    
     # -- bar plot unit pure classifier --
     st.markdown(f'### Proportion of "pure" neurons (p_model < 0.01; polar classification), errorbar = binomial 95% CI')
     fig = plot_unit_pure_class_bar()

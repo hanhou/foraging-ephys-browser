@@ -183,7 +183,7 @@ def _sig_proportion(ts, t_sign_level):
     ci_95 = 1.96 * np.sqrt(prop * (1 - prop) / len(ts))
     return prop * 100, ci_95 * 100, len(ts)
 
-# @st.cache_data(max_entries=100)
+@st.cache_data(max_entries=100)
 def plot_unit_sig_prop_bar(df_unit_filtered, aois, period, t_sign_level):
     p_value = type_1_error[np.searchsorted(t_value, t_sign_level)]
     
