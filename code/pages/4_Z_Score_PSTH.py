@@ -152,9 +152,9 @@ sign_only = cols[2].checkbox('significant only', True)
 
 df_this_setting_all_session, z_score_meta = load_z_score(f'z_score_all_{latent_name}_{time_epoch}_{"z_score_x" if if_z_score_x else "raw_x"}.pkl')
 
-unit_keys = ['subject_id', 'session', 'ins', 'unit']
-df_aoi = st.session_state.df_unit_filtered[['area_of_interest'] + unit_keys].set_index(unit_keys
-                                                                                       ).rename_axis([name if name != 'ins' else 'insertion_number' for name in unit_keys])
+unit_keys = ['subject_id', 'session', 'insertion_number', 'unit']
+
+df_aoi = st.session_state.df_unit_filtered[['area_of_interest'] + unit_keys].set_index(unit_keys)
 df_aoi.columns = pd.MultiIndex.from_product([df_aoi.columns, [''], ['']])
 df_this_setting_all_session = df_this_setting_all_session.join(df_aoi)
 
