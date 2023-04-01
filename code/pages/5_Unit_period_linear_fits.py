@@ -183,7 +183,6 @@ def _sig_proportion(ts, t_sign_level):
     ci_95 = 1.96 * np.sqrt(prop * (1 - prop) / len(ts))
     return prop * 100, ci_95 * 100, len(ts)
 
-@st.cache_data(max_entries=100)
 def plot_unit_sig_prop_bar(df_unit_filtered, aois, period, t_sign_level):
     p_value = type_1_error[np.searchsorted(t_value, t_sign_level)]
     
@@ -353,7 +352,7 @@ elif chosen_id == 'tab4':
     cols = st.columns([1, 2, 1])
     period = cols[0].selectbox('period', [period_mapping[p] for p in all_periods], 
                                [period_mapping[p] for p in all_periods].index(period_mapping['iti_all']))
-    t_sign_level = cols[0].slider('t value threshold', 1.96, 5.0, 2.57)
+    t_sign_level = cols[0].slider('t value threshold', 1.0, 5.0, 2.57)
     aois = cols[1].multiselect('Areas to include', st.session_state.aoi_color_mapping.keys(), st.session_state.aoi_color_mapping)
     
     fig = plot_unit_sig_prop_bar(st.session_state.df_unit_filtered, 
