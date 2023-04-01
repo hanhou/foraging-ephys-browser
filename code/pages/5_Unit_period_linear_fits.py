@@ -250,122 +250,124 @@ def plot_unit_sig_prop_bar(df_unit_filtered, aois, period, t_sign_level):
     return fig
 
 
-# --- Model comparison ---
-st.markdown('### Select tab here 👇')
-chosen_id = stx.tab_bar(data=[
-                            stx.TabBarItemData(id="tab1", title="1. Model comparison", description=""),
-                            stx.TabBarItemData(id="tab2", title="2. Distribution of t-values, compare models", description=""),
-                            stx.TabBarItemData(id="tab3", title="3. Distribution of t-values, compare areas", description=""),
-                            stx.TabBarItemData(id="tab4", title="4. Proportion of significant units", description=""),
-                            ], 
-                        default="tab2")
+if __name__ == '__main__':
 
-if chosen_id == 'tab1':
-    st.markdown('##### :red[Model comparison, all units]')
-    fig = plot_model_comparison()
+    # --- Model comparison ---
+    st.markdown('### Select tab here 👇')
+    chosen_id = stx.tab_bar(data=[
+                                stx.TabBarItemData(id="tab1", title="1. Model comparison", description=""),
+                                stx.TabBarItemData(id="tab2", title="2. Distribution of t-values, compare models", description=""),
+                                stx.TabBarItemData(id="tab3", title="3. Distribution of t-values, compare areas", description=""),
+                                stx.TabBarItemData(id="tab4", title="4. Proportion of significant units", description=""),
+                                ], 
+                            default="tab2")
 
-    fig.update_layout(width=2000, height=700, 
-                    #   title='Model comparison for unit period fitting',
-                    xaxis_title='Period',
-                    yaxis_title='Model BIC',
-                    **plotly_font(20)
-                    )
+    if chosen_id == 'tab1':
+        st.markdown('##### :red[Model comparison, all units]')
+        fig = plot_model_comparison()
 
-    fig.update_xaxes(categoryorder='array', categoryarray=all_models)
-    st.plotly_chart(fig)
+        fig.update_layout(width=2000, height=700, 
+                        #   title='Model comparison for unit period fitting',
+                        xaxis_title='Period',
+                        yaxis_title='Model BIC',
+                        **plotly_font(20)
+                        )
 
-elif chosen_id == 'tab2':
+        fig.update_xaxes(categoryorder='array', categoryarray=all_models)
+        st.plotly_chart(fig, use_container_width=True)
 
-    # --- t-distribution, compare models ---
-    st.markdown('#### :red[Distribution of t-values, compare models]')
+    elif chosen_id == 'tab2':
 
-    st.markdown(
-    """
-    <style>
-        .stMultiSelect [data-baseweb=select] span{
-            max-width: 1000px;
-        }
-    </style>""",
-    unsafe_allow_html=True,
-    )
+        # --- t-distribution, compare models ---
+        st.markdown('#### :red[Distribution of t-values, compare models]')
 
-    cols = st.columns([1, 1, 1])
-    aois = cols[0].multiselect('Areas to include', st.session_state.aoi_color_mapping.keys(), st.session_state.aoi_color_mapping)
-    paras = cols[1].multiselect('Variables to draw', 
-                                [para_mapping[p] for p in all_paras], 
-                                [para_mapping[p] for p in ['relative_action_value_ic', 'total_action_value', 'rpe',
-                                                           'choice_ic', 'choice_ic_next', 'trial_normalized', 'firing_1_back']])
-    periods = cols[2].multiselect('Periods to draw', 
-                                  [period_mapping[p] for p in all_periods],
-                                  [period_mapping[p] for p in all_periods if p!= 'delay'])
+        st.markdown(
+        """
+        <style>
+            .stMultiSelect [data-baseweb=select] span{
+                max-width: 1000px;
+            }
+        </style>""",
+        unsafe_allow_html=True,
+        )
 
-    if aois and paras and periods:
-        df_period_linear_fit = df_period_linear_fit_all.query('area_of_interest in @aois')
-        st.markdown(f'#### N = {len(df_period_linear_fit)}')
-        fig = plot_t_distribution(df_period_linear_fit=df_period_linear_fit, 
-                                  periods=[p for p in all_periods if period_mapping[p] in periods], 
-                                  paras=[p for p in all_paras if para_mapping[p] in paras],
-                                  to_compare='models',
-                                  )
+        cols = st.columns([1, 1, 1])
+        aois = cols[0].multiselect('Areas to include', st.session_state.aoi_color_mapping.keys(), st.session_state.aoi_color_mapping)
+        paras = cols[1].multiselect('Variables to draw', 
+                                    [para_mapping[p] for p in all_paras], 
+                                    [para_mapping[p] for p in ['relative_action_value_ic', 'total_action_value', 'rpe',
+                                                            'choice_ic', 'choice_ic_next', 'trial_normalized', 'firing_1_back']])
+        periods = cols[2].multiselect('Periods to draw', 
+                                    [period_mapping[p] for p in all_periods],
+                                    [period_mapping[p] for p in all_periods if p!= 'delay'])
 
-        plotly_events(fig, override_height=fig.layout.height*1.1, override_width=fig.layout.width, click_event=False)
+        if aois and paras and periods:
+            df_period_linear_fit = df_period_linear_fit_all.query('area_of_interest in @aois')
+            st.markdown(f'#### N = {len(df_period_linear_fit)}')
+            fig = plot_t_distribution(df_period_linear_fit=df_period_linear_fit, 
+                                    periods=[p for p in all_periods if period_mapping[p] in periods], 
+                                    paras=[p for p in all_paras if para_mapping[p] in paras],
+                                    to_compare='models',
+                                    )
 
-elif chosen_id == 'tab3':
-    
-    # --- t-distribution, compare areas ---
-    st.markdown('#### :red[Distribution of t-values, compare areas]')
+            plotly_events(fig, override_height=fig.layout.height*1.1, override_width=fig.layout.width, click_event=False)
 
-    st.markdown(
-    """
-    <style>
-        .stMultiSelect [data-baseweb=select] span{
-            max-width: 1000px;
-        }
-    </style>""",
-    unsafe_allow_html=True,
-    )
+    elif chosen_id == 'tab3':
+        
+        # --- t-distribution, compare areas ---
+        st.markdown('#### :red[Distribution of t-values, compare areas]')
 
-    cols = st.columns([1, 1, 1])
-    model = cols[0].selectbox('Model to plot', all_models, all_models.index('dQ, sumQ, rpe, C*2, R*5, t'))
-    df_this_model = df_period_linear_fit_all.iloc[:, df_period_linear_fit_all.columns.get_level_values('multi_linear_model') == model]
+        st.markdown(
+        """
+        <style>
+            .stMultiSelect [data-baseweb=select] span{
+                max-width: 1000px;
+            }
+        </style>""",
+        unsafe_allow_html=True,
+        )
 
-    availabe_paras_this_model = [p for p in all_paras if p in df_this_model.columns.get_level_values('var_name').unique()]
-    paras = cols[1].multiselect('Variables to draw', 
-                                [para_mapping[p] for p in availabe_paras_this_model], 
-                                [para_mapping[p] for p in availabe_paras_this_model 
-                                 if 'action_value' in p 
-                                 or p in ['rpe', 'choice_ic', 'choice_ic_next', 'trial_normalized', 'firing_1_back']])
-    
-    periods = cols[2].multiselect('Periods to draw', 
-                                  [period_mapping[p] for p in all_periods],
-                                  [period_mapping[p] for p in all_periods if p!= 'delay'])
+        cols = st.columns([1, 1, 1])
+        model = cols[0].selectbox('Model to plot', all_models, all_models.index('dQ, sumQ, rpe, C*2, R*5, t'))
+        df_this_model = df_period_linear_fit_all.iloc[:, df_period_linear_fit_all.columns.get_level_values('multi_linear_model') == model]
 
-    if paras and periods:
-        fig = plot_t_distribution(df_period_linear_fit=df_this_model, 
-                                  to_compare='areas',
-                                  periods=[p for p in all_periods if period_mapping[p] in periods], 
-                                  paras=[p for p in all_paras if para_mapping[p] in paras])
+        availabe_paras_this_model = [p for p in all_paras if p in df_this_model.columns.get_level_values('var_name').unique()]
+        paras = cols[1].multiselect('Variables to draw', 
+                                    [para_mapping[p] for p in availabe_paras_this_model], 
+                                    [para_mapping[p] for p in availabe_paras_this_model 
+                                    if 'action_value' in p 
+                                    or p in ['rpe', 'choice_ic', 'choice_ic_next', 'trial_normalized', 'firing_1_back']])
+        
+        periods = cols[2].multiselect('Periods to draw', 
+                                    [period_mapping[p] for p in all_periods],
+                                    [period_mapping[p] for p in all_periods if p!= 'delay'])
 
-        plotly_events(fig, override_height=fig.layout.height*1.1, override_width=fig.layout.width, click_event=False)
+        if paras and periods:
+            fig = plot_t_distribution(df_period_linear_fit=df_this_model, 
+                                    to_compare='areas',
+                                    periods=[p for p in all_periods if period_mapping[p] in periods], 
+                                    paras=[p for p in all_paras if para_mapping[p] in paras])
 
-elif chosen_id == 'tab4':
-    cols = st.columns([1, 2, 1])
-    period = cols[0].selectbox('period', [period_mapping[p] for p in all_periods], 
-                               [period_mapping[p] for p in all_periods].index(period_mapping['iti_all']))
-    t_sign_level = cols[0].slider('t value threshold', 1.0, 5.0, 2.57)
-    aois = cols[1].multiselect('Areas to include', st.session_state.aoi_color_mapping.keys(), st.session_state.aoi_color_mapping)
-    
-    fig = plot_unit_sig_prop_bar(st.session_state.df_unit_filtered, 
-                                 period=[p for p in all_periods if period_mapping[p] == period],
-                                 aois=aois,
-                                 t_sign_level=t_sign_level)
-    
-    st.plotly_chart(fig, use_container_width=True) # Only plotly_chart keeps the bar plot pattern
-    # plotly_events(fig, override_height=fig.layout.height*1.1, override_width=fig.layout.width, click_event=False)
-    
-    
-    # paras = cols[1].multiselect('Variables to draw', 
-    #                             [para_mapping[p] for p in sig_prop_vars], 
-    #                             [para_mapping[p] for p in sig_prop_vars 
-    #                              if 'action_value' in p 
-    #                              or p in ['rpe']])
+            plotly_events(fig, override_height=fig.layout.height*1.1, override_width=fig.layout.width, click_event=False)
+
+    elif chosen_id == 'tab4':
+        cols = st.columns([1, 2, 1])
+        period = cols[0].selectbox('period', [period_mapping[p] for p in all_periods], 
+                                [period_mapping[p] for p in all_periods].index(period_mapping['iti_all']))
+        t_sign_level = cols[0].slider('t value threshold', 1.0, 5.0, 2.57)
+        aois = cols[1].multiselect('Areas to include', st.session_state.aoi_color_mapping.keys(), st.session_state.aoi_color_mapping)
+        
+        fig = plot_unit_sig_prop_bar(st.session_state.df_unit_filtered, 
+                                    period=[p for p in all_periods if period_mapping[p] == period],
+                                    aois=aois,
+                                    t_sign_level=t_sign_level)
+        
+        st.plotly_chart(fig, use_container_width=True) # Only plotly_chart keeps the bar plot pattern
+        # plotly_events(fig, override_height=fig.layout.height*1.1, override_width=fig.layout.width, click_event=False)
+        
+        
+        # paras = cols[1].multiselect('Variables to draw', 
+        #                             [para_mapping[p] for p in sig_prop_vars], 
+        #                             [para_mapping[p] for p in sig_prop_vars 
+        #                              if 'action_value' in p 
+        #                              or p in ['rpe']])
