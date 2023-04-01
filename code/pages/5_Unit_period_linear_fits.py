@@ -21,10 +21,11 @@ with st.sidebar:
 # Prepare df
 df_period_linear_fit_all = st.session_state.df['df_period_linear_fit_all']
 unit_key_names = ['subject_id', 'session', 'insertion_number', 'unit']
-
-# Filter df
+# Filter df and add area_of_interest to the index
 df_period_linear_fit_all = df_period_linear_fit_all.loc[st.session_state.df_unit_filtered.set_index(unit_key_names).index, :]
-
+df_aoi_filtered = st.session_state.df['df_ephys_units'].set_index(unit_key_names).loc[df_period_linear_fit_all.index, :]
+aoi_index = df_aoi_filtered.reset_index().set_index(unit_key_names + ['area_of_interest'])
+df_period_linear_fit_all.index = aoi_index.index
 
 plotly_font = lambda x: dict(xaxis_tickfont_size=x,
                             xaxis_title_font_size=x,
@@ -32,7 +33,6 @@ plotly_font = lambda x: dict(xaxis_tickfont_size=x,
                             yaxis_title_font_size=x,
                             legend_font_size=x,
                             legend_title_font_size=x,)
-
 
 all_models = ['dQ, sumQ, rpe', 
                'dQ, sumQ, rpe, C*2', 
@@ -59,7 +59,23 @@ para_mapping = {'relative_action_value_ic': 'dQ', 'total_action_value': 'sumQ',
 all_paras = [var for var in df_period_linear_fit_all.columns.get_level_values('var_name').unique() if var !='']
 all_paras = para_mapping.keys()
 
-@st.cache_data(ttl=3600*24)
+t_value = np.linspace(0, 5, 500)
+type_1_error = 2 * norm.sf(t_value)
+
+pure_unit_color_mapping =  {'pure_dQ': 'darkviolet',
+                            'pure_sumQ': 'deepskyblue',
+                            'pure_contraQ': 'darkblue',
+                            'pure_ipsiQ': 'darkorange'}
+                                
+sig_prop_vars = ['relative_action_value_ic', 'total_action_value', 
+                'contra_action_value', 'ipsi_action_value',
+                'rpe',
+                'choice_ic', 'choice_ic_next', 'trial_normalized', 'firing_1_back']
+sig_prop_color_mapping = {var: color for var, color in zip(sig_prop_vars, 
+                                                           ['darkviolet', 'deepskyblue', 'darkblue', 'darkorange', 'gray'] + px.colors.qualitative.Plotly)}
+
+
+@st.cache_data(max_entries=100)
 def plot_model_comparison():
     df_period_linear_fit_melt = df_period_linear_fit_all.iloc[:, df_period_linear_fit_all.columns.get_level_values(-2)=='rel_bic'
                                                             ].stack(level=[0, 1]
@@ -69,7 +85,7 @@ def plot_model_comparison():
                  color='multi_linear_model', category_orders={"multi_linear_model": all_models}, color_discrete_map=model_color_map)
     return fig
 
-@st.cache_data(ttl=3600*24)
+@st.cache_data(max_entries=100)
 def plot_t_distribution(df_period_linear_fit, periods, paras, to_compare='models'):
 
     fig = make_subplots(rows=len(paras), cols=len(periods), 
@@ -79,9 +95,6 @@ def plot_t_distribution(df_period_linear_fit, periods, paras, to_compare='models
                         vertical_spacing=0.02,
                         x_title='abs(t)',
                         )
-
-    t_value = np.linspace(0, 10, 100)
-    type_1_error = 2 * norm.sf(t_value)
 
     for row, para in enumerate(paras):
         for col, period in enumerate(periods):
@@ -102,7 +115,8 @@ def plot_t_distribution(df_period_linear_fit, periods, paras, to_compare='models
                 for i, model in enumerate(models):
                     hist, x = np.histogram(df.query(f'multi_linear_model == "{model}"')['abs(t)'], 
                                         bins=100)
-                    sign_ratio = 1 - np.cumsum(hist) / np.sum(hist)
+                    n = np.sum(hist)
+                    sign_ratio = 1 - np.cumsum(hist) / n if n > 0 else np.full(hist.shape, np.nan)
                     fig.add_trace(go.Scattergl(x=(x[:-1] + x[1:])/2, 
                                             y=sign_ratio,
                                             mode='lines',
@@ -118,10 +132,10 @@ def plot_t_distribution(df_period_linear_fit, periods, paras, to_compare='models
                                             ),
                                 row=row+1, col=col+1)
             elif to_compare == 'areas':
-                df_aoi = df.join(st.session_state.df['df_ephys_units'].set_index(unit_key_names)['area_of_interest'], how='left')
                 for area, color in st.session_state.aoi_color_mapping.items():
-                    hist, x = np.histogram(df_aoi.query(f'area_of_interest == "{area}"')['abs(t)'], bins=100)
-                    sign_ratio = 1 - np.cumsum(hist) / np.sum(hist)
+                    hist, x = np.histogram(df.query(f'area_of_interest == "{area}"')['abs(t)'], bins=100)
+                    n = np.sum(hist)
+                    sign_ratio = 1 - np.cumsum(hist) / n if n > 0 else np.nan
                     fig.add_trace(go.Scattergl(x=(x[:-1] + x[1:])/2, 
                                                 y=sign_ratio,
                                                 mode='lines',
@@ -130,7 +144,7 @@ def plot_t_distribution(df_period_linear_fit, periods, paras, to_compare='models
                                                 legendgroup=area,
                                                 showlegend=col==0 and row ==0,
                                                 hovertemplate=
-                                                    '%s, n = %s<br>' % (area, np.sum(hist)) +
+                                                    '%s, n = %s<br>' % (area, n) +
                                                     '%{y:%2.1f} units, t > %{x:.2f}<br><extra></extra>',
                                                 visible=True,
                                                 ),
@@ -157,25 +171,98 @@ def plot_t_distribution(df_period_linear_fit, periods, paras, to_compare='models
     # fig.update_traces(line_width=3)
     fig.update_xaxes(range=[0, 5])
     fig.update_yaxes(range=[0, 1])
-    fig.update_layout(width=min(2000, 2000/6*len(periods)), height=200 + 200 * len(paras),
+    fig.update_layout(width=min(1600, 2000/6 *len(periods)), height=200 + 200 * len(paras),
                     font_size=17, hovermode='closest',
                     )
     fig.update_annotations(font_size=20)
         
     return fig
 
+def _sig_proportion(ts, t_sign_level):
+    prop = np.sum(np.abs(ts) >= t_sign_level) / len(ts)
+    ci_95 = 1.96 * np.sqrt(prop * (1 - prop) / len(ts))
+    return prop * 100, ci_95 * 100, len(ts)
+
+# @st.cache_data(max_entries=100)
+def plot_unit_sig_prop_bar(df_unit_filtered, aois, period, t_sign_level):
+    p_value = type_1_error[np.searchsorted(t_value, t_sign_level)]
+    
+    model_groups = {('dQ, sumQ, rpe', 'contraQ, ipsiQ, rpe'): ['naive model',   # Name
+                                                               [p for p in sig_prop_vars if 'action_value' in p or p in ['rpe']], # Para to include
+                                                               dict(pattern_shape='/', pattern_fillmode="replace") # Setting
+                                                               ],
+                    ('dQ, sumQ, rpe, C*2, R*5, t', 'contraQ, ipsiQ, rpe, C*2, R*5, t'): ['full model',
+                                                                                         [p for p in sig_prop_vars if 'action_value' in p or p in 
+                                                                                          ['rpe', 'choice_ic', 'choice_ic_next', 'trial_normalized', 'firing_1_back']],
+                                                                                         dict()],
+                    }   
+    
+    fig = go.Figure()
+    
+    for model_group, model_group_setting in model_groups.items():
+        paras = model_group_setting[1]
+        for para in paras:
+            color = sig_prop_color_mapping[para]
+            prop_ci = df_period_linear_fit_all.loc[:, (period, model_group, 't', para)
+                                                  ].groupby('area_of_interest'
+                                                            ).agg(lambda x: _sig_proportion(x, t_sign_level))
+            
+            filtered_aoi = [aoi for aoi in aois if aoi in prop_ci.index] # Sort according to st.session_state.df['aoi'].index
+            prop_ci = prop_ci.reindex(filtered_aoi)
+            prop = [x[0] for x in prop_ci.values[:, 0]] 
+            err = [x[1] for x in prop_ci.values[:, 0]] 
+            ns =  [x[2] for x in prop_ci.values[:, 0]] 
+
+            fig.add_trace(go.Bar( 
+                                name=f'{para_mapping[para]} ({model_group_setting[0]})',
+                                x=filtered_aoi,
+                                y=prop,
+                                error_y=dict(type='data', array=err, thickness=1),
+                                hovertemplate='%%{x}, %s, %s' % (para_mapping[para], period) + 
+                                            '<br>%{y:.1f} ± %{customdata[0]:.1f} % (95% CI)' + 
+                                            '<br>n = %{customdata[1]} <extra></extra>',
+                                customdata=np.stack((err, ns), axis=-1),
+                                marker=dict(
+                                            color='white' if model_group_setting[0] == 'naive model' else color,
+                                            line_color=color,
+                                            line_width=1,
+                                            **model_group_setting[2],
+                                            ),
+                                ))
+        
+    fig.add_hline(y=p_value * 100, 
+                  line_color='black', line_dash='dash')
+    
+    fig.update_layout(barmode='group', 
+                      height=800,
+                      yaxis_title='% sig. units (+/- 95% CI)',
+                      font=dict(size=20),
+                      hovermode='closest',
+                      title=f'p < {p_value:.2g}',
+                      yaxis_range=[0, 100],
+                      **plotly_font(20),  # Have to use this because we have to use plotly_chart to keep the patterns...  
+                      title_font_size=25,
+                      legend=dict(
+                                yanchor="top", y=1.2,
+                                xanchor="right", x=1,
+                                orientation="h",
+                            )
+                      )    
+    return fig
+
 
 # --- Model comparison ---
-
+st.markdown('### Select tab here 👇')
 chosen_id = stx.tab_bar(data=[
                             stx.TabBarItemData(id="tab1", title="1. Model comparison", description=""),
-                            stx.TabBarItemData(id="tab2", title="2. t-distribution, compare models", description=""),
-                            stx.TabBarItemData(id="tab3", title="3. t-distribution, compare areas", description=""),
+                            stx.TabBarItemData(id="tab2", title="2. Distribution of t-values, compare models", description=""),
+                            stx.TabBarItemData(id="tab3", title="3. Distribution of t-values, compare areas", description=""),
+                            stx.TabBarItemData(id="tab4", title="4. Proportion of significant units", description=""),
                             ], 
                         default="tab2")
 
 if chosen_id == 'tab1':
-    st.markdown('#### Model comparison, all units')
+    st.markdown('##### :red[Model comparison, all units]')
     fig = plot_model_comparison()
 
     fig.update_layout(width=2000, height=700, 
@@ -191,9 +278,7 @@ if chosen_id == 'tab1':
 elif chosen_id == 'tab2':
 
     # --- t-distribution, compare models ---
-    st.markdown('#### Distribution of t-values, compare models')
-    paras = ['relative_action_value_ic', 'total_action_value', 'rpe',
-            'choice_ic', 'choice_ic_next', 'trial_normalized', 'firing_1_back']
+    st.markdown('#### :red[Distribution of t-values, compare models]')
 
     st.markdown(
     """
@@ -216,8 +301,7 @@ elif chosen_id == 'tab2':
                                   [period_mapping[p] for p in all_periods if p!= 'delay'])
 
     if aois and paras and periods:
-        df_aoi = st.session_state.df_unit_filtered.set_index(unit_key_names)
-        df_period_linear_fit = df_period_linear_fit_all.loc[df_aoi.query('area_of_interest in @aois').index, :]
+        df_period_linear_fit = df_period_linear_fit_all.query('area_of_interest in @aois')
         st.markdown(f'#### N = {len(df_period_linear_fit)}')
         fig = plot_t_distribution(df_period_linear_fit=df_period_linear_fit, 
                                   periods=[p for p in all_periods if period_mapping[p] in periods], 
@@ -230,9 +314,7 @@ elif chosen_id == 'tab2':
 elif chosen_id == 'tab3':
     
     # --- t-distribution, compare areas ---
-    st.markdown('#### Distribution of t-values, compare areas')
-    paras = ['relative_action_value_ic', 'total_action_value', 'rpe',
-            'choice_ic', 'choice_ic_next', 'trial_normalized', 'firing_1_back']
+    st.markdown('#### :red[Distribution of t-values, compare areas]')
 
     st.markdown(
     """
@@ -266,4 +348,25 @@ elif chosen_id == 'tab3':
                                   paras=[p for p in all_paras if para_mapping[p] in paras])
 
         plotly_events(fig, override_height=fig.layout.height*1.1, override_width=fig.layout.width, click_event=False)
+
+elif chosen_id == 'tab4':
+    cols = st.columns([1, 2, 1])
+    period = cols[0].selectbox('period', [period_mapping[p] for p in all_periods], 
+                               [period_mapping[p] for p in all_periods].index(period_mapping['iti_all']))
+    t_sign_level = cols[0].slider('t value threshold', 1.96, 5.0, 2.57)
+    aois = cols[1].multiselect('Areas to include', st.session_state.aoi_color_mapping.keys(), st.session_state.aoi_color_mapping)
     
+    fig = plot_unit_sig_prop_bar(st.session_state.df_unit_filtered, 
+                                 period=[p for p in all_periods if period_mapping[p] == period],
+                                 aois=aois,
+                                 t_sign_level=t_sign_level)
+    
+    st.plotly_chart(fig, use_container_width=True) # Only plotly_chart keeps the bar plot pattern
+    # plotly_events(fig, override_height=fig.layout.height*1.1, override_width=fig.layout.width, click_event=False)
+    
+    
+    # paras = cols[1].multiselect('Variables to draw', 
+    #                             [para_mapping[p] for p in sig_prop_vars], 
+    #                             [para_mapping[p] for p in sig_prop_vars 
+    #                              if 'action_value' in p 
+    #                              or p in ['rpe']])
