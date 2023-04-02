@@ -302,9 +302,9 @@ def plot_unit_pure_sig_prop_bar(aois, period, t_sign_level, model='dQ, sumQ, rpe
             color = pure_unit_color_mapping[unit_class]
             this = np.any([(a_min < theta) & (theta < a_max) for a_min, a_max in ranges], axis=0) 
             this = this & (np.sqrt(x ** 2 + y ** 2) >= t_sign_level)
-            df_period_linear_fit_all[period, model_group, f'{unit_class}_from_{model}', ''] = this
+            df_period_linear_fit_all[period, model_group, f'{unit_class}', ''] = this
           
-            prop_ci = df_period_linear_fit_all[period, model_group, f'{unit_class}_from_{model}', ''].groupby('area_of_interest').apply(_pure_proportion)  
+            prop_ci = df_period_linear_fit_all[period, model_group, f'{unit_class}', ''].groupby('area_of_interest').apply(_pure_proportion)  
                         
             # filtered_aoi = [aoi for aoi in st.session_state.df['aoi'].index if aoi in prop_ci.index and aoi in aois] # Sort according to st.session_state.df['aoi'].index
             filtered_aoi = [aoi for aoi in aois if aoi in prop_ci.index and aoi in aois]
@@ -358,23 +358,23 @@ def plot_unit_pure_sig_prop_bar(aois, period, t_sign_level, model='dQ, sumQ, rpe
 def plot_unit_class_scatter(period, model='dQ, sumQ, rpe'):
 
     x_name, y_name = polar_classifiers[model][0].values()
-    model_groups = {(model): 'naive model', (model+', C*2, R*5, t'): 'full model'}  
+    models = {(model): 'naive model', (model+', C*2, R*5, t'): 'full model'}  
 
     # fig = make_subplots(rows=1, cols=2, column_titles=list(model_groups.keys()))
     
     figs = []
     
-    for i, model_group in enumerate(model_groups):
+    for i, (model, descr) in enumerate(models.items()):
         fig = go.Figure()
         for unit_class, color in pure_unit_color_mapping.items():
-            this = df_period_linear_fit_all[period, model_group, f'{unit_class}_from_{model}', '']
+            this = df_period_linear_fit_all[period, (model), f'{unit_class}', '']
                 
-            fig.add_trace(go.Scattergl(x=df_period_linear_fit_all[period, model_group, 't', x_name][this], 
-                                       y=df_period_linear_fit_all[period, model_group, 't', y_name][this], 
+            fig.add_trace(go.Scattergl(x=df_period_linear_fit_all[period, (model), 't', x_name][this], 
+                                       y=df_period_linear_fit_all[period, (model), 't', y_name][this], 
                                        mode='markers',
                                        marker=dict(symbol='circle', size=5, opacity=0.5, 
                                                 line=dict(color=color, width=1),
-                                                color=color if 'R*5' in model_group else 'white'), 
+                                                color=color if 'R*5' in (model) else 'white'), 
                                        name=f'{unit_class}'
                                       ), 
                         #   row=1, col=i+1
@@ -385,7 +385,8 @@ def plot_unit_class_scatter(period, model='dQ, sumQ, rpe'):
                         xaxis_range=[-20, 20], yaxis_range=[-20, 20],
                         hovermode='closest',
                         legend=dict(yanchor="bottom", y=0, xanchor="right", x=1, orientation="v", font_size=15),
-                        title=f'from {model_group}',
+                        title=f'{descr} ({model})',
+                        title_font_size=20,
                         )
         fig.update_xaxes(scaleanchor = "y", scaleratio = 1)
         figs.append(fig)
