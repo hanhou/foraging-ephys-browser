@@ -354,7 +354,6 @@ def plot_unit_pure_sig_prop_bar(aois, period, t_sign_level, model='dQ, sumQ, rpe
     return fig
 
 
-@st.cache_data(ttl=24*3600)
 def plot_unit_class_scatter(period, model='dQ, sumQ, rpe'):
 
     x_name, y_name = polar_classifiers[model][0].values()
@@ -372,8 +371,8 @@ def plot_unit_class_scatter(period, model='dQ, sumQ, rpe'):
             fig.add_trace(go.Scattergl(x=df_period_linear_fit_all[period, (model), 't', x_name][this], 
                                        y=df_period_linear_fit_all[period, (model), 't', y_name][this], 
                                        mode='markers',
-                                       marker=dict(symbol='circle', size=5, opacity=0.5, 
-                                                line=dict(color=color, width=1),
+                                       marker=dict(symbol='circle', size=7, opacity=0.3, 
+                                                line=dict(color=color, width=1.5),
                                                 color=color if 'R*5' in (model) else 'white'), 
                                        name=f'{unit_class}'
                                       ), 
