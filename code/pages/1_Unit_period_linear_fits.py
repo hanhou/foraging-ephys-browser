@@ -404,6 +404,34 @@ def plot_unit_class_scatter(period, model='dQ, sumQ, rpe'):
             
     return figs
 
+def select_periods(label='Periods to draw', col=st):
+    period_names = col.multiselect(label, 
+                                period_name_mapper.values(),
+                                [period_name_mapper[p] for p in period_name_mapper if p!= 'delay'])
+    periods = [p for p in period_name_mapper if period_name_mapper[p] in period_names]
+    return period_names, periods
+
+def select_model(available_models=list(model_name_mapper.keys()),
+                 default_model='dQ, sumQ, rpe, C*2, R*5, t',
+                label='Model to plot', 
+                col=st):
+    model_name = col.selectbox(label,
+                               [model_name_mapper[m] for m in available_models], 
+                                available_models.index(default_model))
+    model = [m for m in model_name_mapper if model_name_mapper[m] == model_name][0]
+    return model_name, model
+
+def select_paras(available_paras=list(para_name_mapper.keys()), 
+                default_paras=None, 
+                label='Variables to draw',
+                col=st):
+    para_names = col.multiselect(label, 
+                                 [para_name_mapper[p] for p in available_paras],
+                                 [para_name_mapper[p] for p in default_paras],
+                                 )
+    paras = [p for p in para_name_mapper if para_name_mapper[p] in para_names]
+    return para_names, paras
+
 
 if __name__ == '__main__':
 
@@ -448,21 +476,18 @@ if __name__ == '__main__':
 
         cols = st.columns([1, 1, 1])
         aois = cols[0].multiselect('Areas to include', st.session_state.aoi_color_mapping.keys(), st.session_state.aoi_color_mapping)
-        paras = cols[1].multiselect('Variables to draw', 
-                                    para_name_mapper.values(), 
-                                    ['dQ', 'sumQ', 'rpe', 'choice (this)', 'choice (next)', 'trial number', 'firing 1 back']
-        )
    
-        periods = cols[2].multiselect('Periods to draw', 
-                                    period_name_mapper.values(),
-                                    [period_name_mapper[p] for p in period_name_mapper if p!= 'delay'])
-
+        _, paras = select_paras(default_paras=[p for p in para_name_mapper if para_name_mapper[p] in 
+                                              ['dQ', 'sumQ', 'rpe', 'choice (this)', 'choice (next)', 'trial number', 'firing 1 back']], 
+                               col=cols[1])
+        _, periods = select_periods(col=cols[2])
+        
         if aois and paras and periods:
             df_period_linear_fit = df_period_linear_fit_all.query('area_of_interest in @aois')
             st.markdown(f'#### N = {len(df_period_linear_fit)}')
             fig = plot_t_distribution(df_period_linear_fit=df_period_linear_fit, 
-                                    periods=[p for p in period_name_mapper if period_name_mapper[p] in periods], 
-                                    paras=[p for p in para_name_mapper if para_name_mapper[p] in paras],
+                                    periods=periods, 
+                                    paras=paras,
                                     to_compare='models',
                                     )
 
@@ -484,27 +509,24 @@ if __name__ == '__main__':
         )
 
         cols = st.columns([1, 1, 1])
-        model_name = cols[0].selectbox('Model to plot', 
-                                        model_name_mapper.values(), 
-                                        list(model_name_mapper.keys()).index('dQ, sumQ, rpe, C*2, R*5, t'))
-        model = [m for m in model_name_mapper if model_name_mapper[m] == model_name][0]
+        
+        _, model = select_model(col=cols[0])
+        
         df_this_model = df_period_linear_fit_all.iloc[:, df_period_linear_fit_all.columns.get_level_values('multi_linear_model') == model]
 
         availabe_paras_this_model = [p for p in para_name_mapper if p in df_this_model.columns.get_level_values('var_name').unique()]
-        paras = cols[1].multiselect('Variables to draw', 
-                                    [para_name_mapper[p] for p in availabe_paras_this_model], 
-                                    [para_name_mapper[p] for p in availabe_paras_this_model 
-                                    if 'action_value' in p 
-                                    or p in ['rpe', 'choice_ic', 'choice_ic_next', 'trial_normalized', 'firing_1_back']])
-        
-        periods = cols[2].multiselect('Periods to draw', 
-                                      period_name_mapper.values(),
-                                      [period_name_mapper[p] for p in period_name_mapper if p!= 'delay'])
+        _, paras = select_paras(available_paras=availabe_paras_this_model, 
+                               default_paras=[p for p in availabe_paras_this_model if 'action_value' in p 
+                                              or p in ['rpe', 'choice_ic', 'choice_ic_next', 'trial_normalized', 'firing_1_back']],
+                               col=cols[1])
+                
+        _, periods = select_periods(col=cols[2])
+
         if paras and periods:
             fig = plot_t_distribution(df_period_linear_fit=df_this_model, 
                                     to_compare='areas',
-                                    periods=[p for p in period_name_mapper if period_name_mapper[p] in periods], 
-                                    paras=[p for p in para_name_mapper if para_name_mapper[p] in paras])
+                                    periods=periods, 
+                                    paras=paras)
 
             plotly_events(fig, override_height=fig.layout.height*1.1, override_width=fig.layout.width, click_event=False)
 
