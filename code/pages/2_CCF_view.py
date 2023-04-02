@@ -9,10 +9,10 @@ import streamlit as st
 from streamlit_plotly_events import plotly_events
 from streamlit_util import *
 
-from Home import add_unit_filter, init, _on_change_t_sign_level, pure_unit_color_mapping
+from Home import add_unit_filter, init, select_t_sign_level, pure_unit_color_mapping
 
 import importlib
-uplf = importlib.import_module('.1_Unit_period_linear_fits', package='pages')
+uplf = importlib.import_module('.1_Linear_model_comparison', package='pages')
 
 import nrrd
 
@@ -276,7 +276,8 @@ def plot_coronal_slice_unit(ccf_x, coronal_slice_thickness, if_flip, *args):
                       yaxis_title='ccf_y (superior -> inferior)',
                       font=dict(size=20),
                       hovermode='closest',
-                      title=f'{heatmap_aggr_name} of {column_to_map_name} [{period_name}]',
+                      title=f'{heatmap_aggr_name} of {column_to_map_name}' + 
+                            (f'[{uplf.period_name_mapper[column_to_map[0]]}]' if isinstance(column_to_map, tuple) else ''),
                       title_font_size=20,
                       )
     
@@ -334,7 +335,8 @@ def plot_saggital_slice_unit(ccf_z, saggital_slice_thickness, if_flip, *args):
                       yaxis_title='ccf_y (superior -> inferior)',
                       font=dict(size=20),
                       hovermode='closest',
-                      title=f'{heatmap_aggr_name} of {column_to_map_name} [{period_name}]',
+                      title=f'{heatmap_aggr_name} of {column_to_map_name}' + 
+                            (f'[{uplf.period_name_mapper[column_to_map[0]]}]' if isinstance(column_to_map, tuple) else ''),
                       title_font_size=20,
                       )
     
@@ -383,7 +385,7 @@ def _ccf_heatmap_get_aggr_func_and_range(heatmap_aggr_name, column_to_map, value
                                 'mean': ('mean', heatmap_range),
                                 'mean (significant only)': (lambda x: np.mean(x[np.abs(x) >= sign_level]), heatmap_range),
                                 
-                                r'% significant units': (lambda x: sum(np.abs(x) >= sign_level) / len(x) * 100, 
+                                r'% significant units': (lambda x: sum(np.abs(x) >= sign_level) / len(x) * 100 if len(x) else np.nan, 
                                                         (5, 100, 5, (5, 50))),
                                 
                                 'number of units': (lambda x: len(x) if len(x) else np.nan, 
@@ -398,143 +400,170 @@ def _ccf_heatmap_get_aggr_func_and_range(heatmap_aggr_name, column_to_map, value
     return heatmap_aggr_func_mapping[heatmap_aggr_name][0], heatmap_aggr_func_mapping[heatmap_aggr_name][1]
 
 
-with st.sidebar:    
-    add_unit_filter()
-
-    with st.expander("CCF view settings", expanded=True):
+def select_para_of_interest(prompt="Map what to CCF?", suffix='',
+                            default_model='dQ, sumQ, rpe, C*2, R*5, t',
+                            default_period='iti_all',
+                            default_paras=None,):
+    
+    type_to_map = st.selectbox(prompt,
+                            ['unit tuning', 'unit stats'],
+                            key=f'type_to_map{suffix}',
+                            index=0)
+    
+    if type_to_map == 'unit tuning':
         
-        if_flip = st.checkbox("Flip to left hemisphere", value=True)        
-        type_to_map = st.selectbox("Map what to CCF?",
-                                   ['unit tuning', 'unit stats'],
-                                   index=0)
+        _, model = uplf.select_model(label='which model',
+                                     suffix=suffix,
+                                     default_model=default_model,
+                                    )
+        _, period = uplf.select_period(multi=False,
+                                       suffix=suffix,
+                                       default_period=default_period,
+                                       label='which period')
         
-        if type_to_map == 'unit tuning':
-            
-            _, model = uplf.select_model(label='which model',
-                                         default_model='dQ, sumQ, rpe, C*2, R*5, t',
-                                         )
-            period_name, period = uplf.select_period(multi=False, 
-                                           label='which period')
-            
-            df_this_model = uplf.df_period_linear_fit_all.iloc[:, uplf.df_period_linear_fit_all.columns.get_level_values('multi_linear_model') == model]
+        df_this_model = uplf.df_period_linear_fit_all.iloc[:, uplf.df_period_linear_fit_all.columns.get_level_values('multi_linear_model') == model]
 
-            cols= st.columns([1, 1])
-            stat = cols[0].selectbox("which statistic",
-                                    ['t', 'beta', 'model_r2'] + list(pure_unit_color_mapping.keys()), 
-                                    0)  # Could be model level stats, like 'model_r2'
-            available_paras_this_model = [p for p in uplf.para_name_mapper if p in 
-                                         df_this_model.columns[df_this_model.columns.get_level_values('stat_name') == stat
-                                                               ].get_level_values('var_name').unique()]
-            if available_paras_this_model:
-                _, para = uplf.select_para(multi=False,
+        cols= st.columns([1, 1])
+        stat = cols[0].selectbox("which statistic",
+                                ['t', 'beta', 'model_r2'] + list(pure_unit_color_mapping.keys()), 
+                                0,
+                                key=f'stat{suffix}')  # Could be model level stats, like 'model_r2'
+        available_paras_this_model = [p for p in uplf.para_name_mapper if p in 
+                                    df_this_model.columns[df_this_model.columns.get_level_values('stat_name') == stat
+                                                        ].get_level_values('var_name').unique()]
+        if available_paras_this_model:
+            _, para = uplf.select_para(multi=False,
+                                       suffix=suffix,
                                         available_paras=available_paras_this_model,
-                                        default_paras=available_paras_this_model[0],
+                                        default_paras=available_paras_this_model[0] if default_paras is None else default_paras,
                                         label='which variable',
                                         col=cols[1])
-            else:
-                para = ''
-            
-            
-            column_to_map = (period, model, stat, para)
-            column_to_map_name = f'{stat}_{uplf.para_name_mapper[para]}' if para != '' else stat
-            if_map_pure = 'pure' in column_to_map[2]
-            
-        elif type_to_map == 'unit stats':
-            column_to_map = st.selectbox("which stat", 
-                                        st.session_state.ccf_stat_names, 
-                                        index=st.session_state.ccf_stat_names.index('avg_firing_rate'))
-            column_to_map_name = column_to_map
-            if_map_pure = False
-            
-        values_to_map = st.session_state.df_unit_filtered_merged[column_to_map].values
-        values_to_map = values_to_map[~np.isnan(values_to_map)]
-        
-        if_take_abs = st.checkbox("Use abs()?", value=False) if any(values_to_map < 0) else False
-        if if_take_abs:
-            values_to_map = np.abs(values_to_map)
-            
-        # Add a small histogram
-        if column_to_map != 'number_units' and not if_map_pure:
-            counts, bins = np.histogram(values_to_map, bins=100)        
-            fig = px.bar(x=bins[1:], y=counts)
-            # fig.add_vrect(x0=user_num_input[0], x1=user_num_input[1], fillcolor='red', opacity=0.1, line_width=0)
-            fig.update_layout(showlegend=False, height=100, 
-                            yaxis=dict(visible=False),
-                            xaxis=dict(title=''),
-                            margin=dict(l=0, r=0, t=0, b=0))
-            st.plotly_chart(fig, use_container_width=True)
-                        
-            if_ccf_plot_scatter = st.checkbox("Draw units", value=True)
         else:
-            if_ccf_plot_scatter = False
-            
-        if if_ccf_plot_scatter:       
-            with st.expander("Unit settings", expanded=True):
-                size_range = st.slider("size range", 0, 100, (0, 50))
-                size_gamma = st.slider("gamma", min_value=0.0, max_value=2.0, value=1.0, step=0.1)
+            para = ''
         
-        if_ccf_plot_heatmap = st.checkbox("Draw heatmap", value=True)
-        if if_ccf_plot_heatmap:
-            with st.expander("Heatmap settings", expanded=True):
-                if column_to_map != 'number_units':
-                    available_aggr_funcs  = _ccf_heatmap_available_aggr_funcs(column_to_map)
-                    heatmap_aggr_name = st.selectbox("aggregate function", 
-                                                    available_aggr_funcs, 
-                                                    index=0)
-                else:
-                    heatmap_aggr_name = 'number of units'
-                
-                if 'sign' in heatmap_aggr_name or if_map_pure: 
-                    sign_level = st.number_input("significant level: t >= ", value=1.96, min_value=0.0, step=0.1,
-                                                 key='t_sign_level',
-                                                 on_change=_on_change_t_sign_level)   # Update pure polar classification
+        column_to_map = (period, model, stat, para)
+        column_to_map_name = f'{stat}_{uplf.para_name_mapper[para]}' if para != '' else stat
+        if_map_pure = 'pure' in column_to_map[2]
+        
+    elif type_to_map == 'unit stats':
+        column_to_map = st.selectbox("which stat", 
+                                    st.session_state.ccf_stat_names, 
+                                    index=st.session_state.ccf_stat_names.index('avg_firing_rate'))
+        column_to_map_name = column_to_map
+        if_map_pure = False
+    
+    values_to_map = st.session_state.df_unit_filtered_merged[column_to_map].values
+    values_to_map = values_to_map[~np.isnan(values_to_map)]
 
-                if_bi_directional_heatmap = (any(values_to_map < 0) + any(values_to_map > 0)) == 2 and r'%' not in heatmap_aggr_name 
-                heatmap_aggr_func, heatmap_color_ranges = _ccf_heatmap_get_aggr_func_and_range(heatmap_aggr_name, column_to_map, values_to_map)
-                heatmap_color_range = st.slider(f"Heatmap color range ({heatmap_aggr_name})", 
-                                                heatmap_color_ranges[0], heatmap_color_ranges[1],
-                                                step=heatmap_color_ranges[2], value=heatmap_color_ranges[3])
-                
-                heatmap_bin_size = st.slider("Heatmap bin size", 25, 500, step=25, value=100)
-                heatmap_smooth = st.slider("Heatmap smooth factor", 0.0, 2.0, step=0.1, value=1.0)
+    if_take_abs = st.checkbox("Use abs()?", value=False, key='abs'+suffix) if any(values_to_map < 0) else False
+
+    if if_take_abs:
+        values_to_map = np.abs(values_to_map)
+        
+    return dict(column_to_map=column_to_map, column_to_map_name=column_to_map_name, 
+                if_map_pure=if_map_pure, if_take_abs=if_take_abs,
+                values_to_map=values_to_map)
+
+if __name__ == '__main__':
+
+    with st.sidebar:    
+        try:
+            add_unit_filter()
+        except:
+            st.experimental_rerun()
+
+        with st.expander("CCF view settings", expanded=True):
             
+            with st.expander('Value mapping', expanded=True):
+                para = select_para_of_interest()
+                column_to_map, column_to_map_name, if_map_pure, if_take_abs, values_to_map = \
+                    para['column_to_map'], para['column_to_map_name'], para['if_map_pure'], para['if_take_abs'], para['values_to_map']
+
+                    
+                # Add a small histogram
+                if column_to_map != 'number_units' and not if_map_pure:
+                    counts, bins = np.histogram(values_to_map, bins=100)        
+                    fig = px.bar(x=bins[1:], y=counts)
+                    # fig.add_vrect(x0=user_num_input[0], x1=user_num_input[1], fillcolor='red', opacity=0.1, line_width=0)
+                    fig.update_layout(showlegend=False, height=100, 
+                                    yaxis=dict(visible=False),
+                                    xaxis=dict(title=''),
+                                    margin=dict(l=0, r=0, t=0, b=0))
+                    st.plotly_chart(fig, use_container_width=True)
+                    
+            with st.expander('Unit scatter', expanded=True):
+                if column_to_map != 'number_units' and not if_map_pure:
+                    if_ccf_plot_scatter = st.checkbox("Draw units", value=True)
+                else:
+                    if_ccf_plot_scatter = False
+                
+                if if_ccf_plot_scatter:       
+                    with st.expander("Unit settings", expanded=True):
+                        size_range = st.slider("size range", 0, 100, (0, 50))
+                        size_gamma = st.slider("gamma", min_value=0.0, max_value=2.0, value=1.0, step=0.1)
+            
+            with st.expander('Heatmap', expanded=True):
+                if_ccf_plot_heatmap = st.checkbox("Draw heatmap", value=True)
+                if if_ccf_plot_heatmap:
+                    with st.expander("Heatmap settings", expanded=True):
+                        if column_to_map != 'number_units':
+                            available_aggr_funcs  = _ccf_heatmap_available_aggr_funcs(column_to_map)
+                            heatmap_aggr_name = st.selectbox("aggregate function", 
+                                                            available_aggr_funcs, 
+                                                            index=0)
+                        else:
+                            heatmap_aggr_name = 'number of units'
+                        
+                        if 'sign' in heatmap_aggr_name or if_map_pure: 
+                            sign_level = select_t_sign_level(st)
+
+                        if_bi_directional_heatmap = (any(values_to_map < 0) + any(values_to_map > 0)) == 2 and r'%' not in heatmap_aggr_name 
+                        heatmap_aggr_func, heatmap_color_ranges = _ccf_heatmap_get_aggr_func_and_range(heatmap_aggr_name, column_to_map, values_to_map)
+                        heatmap_color_range = st.slider(f"Heatmap color range", 
+                                                        heatmap_color_ranges[0], heatmap_color_ranges[1],
+                                                        step=heatmap_color_ranges[2], value=heatmap_color_ranges[3])
+                        
+                        heatmap_bin_size = st.slider("Heatmap bin size", 25, 500, step=25, value=100)
+                        heatmap_smooth = st.slider("Heatmap smooth factor", 0.0, 2.0, step=0.1, value=1.0)
+                
+            if_flip = st.checkbox("Flip to left hemisphere", value=True)        
 
 
 
-# --- coronal slice ---
-col_coronal, col_saggital = st.columns((1, 1.8))
-with col_coronal:
-    ccf_z = st.slider("Saggital slice at (ccf_z)", min_value=600, max_value=5700 if if_flip else 10800, 
-                                    value=st.session_state.ccf_z if 'ccf_z' in st.session_state else 5100, 
-                                    step=100)       # whole ccf @ 25um [528x320x456] 
-    saggital_thickness = st.slider("Slice thickness (LR)", min_value= 100, max_value=5000, step=50, value=700)
-    
-    container_coronal = st.container()
-    
-# --- saggital slice ---
-with col_saggital:
-    ccf_x = st.slider("Coronal slice at (ccf_x)", min_value=0, max_value=13100, value=3500, step=100) # whole ccf @ 25um [528x320x456] 
-    # st.markdown(f'##### AP relative to Bregma ~ {ccf_x_to_AP(ccf_x): .2f} mm') 
-    coronal_thickness = st.slider("Slice thickness (AP)", min_value= 100, max_value=5000, step=50, value=700)
-    
-    container_saggital = st.container()
+    # --- coronal slice ---
+    col_coronal, col_saggital = st.columns((1, 1.8))
+    with col_coronal:
+        ccf_z = st.slider("Saggital slice at (ccf_z)", min_value=600, max_value=5700 if if_flip else 10800, 
+                                        value=st.session_state.ccf_z if 'ccf_z' in st.session_state else 5100, 
+                                        step=100)       # whole ccf @ 25um [528x320x456] 
+        saggital_thickness = st.slider("Slice thickness (LR)", min_value= 100, max_value=5000, step=50, value=700)
+        
+        container_coronal = st.container()
+        
+    # --- saggital slice ---
+    with col_saggital:
+        ccf_x = st.slider("Coronal slice at (ccf_x)", min_value=0, max_value=13100, value=3500, step=100) # whole ccf @ 25um [528x320x456] 
+        # st.markdown(f'##### AP relative to Bregma ~ {ccf_x_to_AP(ccf_x): .2f} mm') 
+        coronal_thickness = st.slider("Slice thickness (AP)", min_value= 100, max_value=5000, step=50, value=700)
+        
+        container_saggital = st.container()
 
-container_unit_all_in_one = st.container()
+    container_unit_all_in_one = st.container()
 
 
-with container_coronal:
-    fig = plot_coronal_slice_unit(ccf_x, coronal_thickness, if_flip) #, [size_to_map, size_gamma, size_range], aggrid_outputs, ccf_z, saggital_thickness)
-    fig.add_vline(x=ccf_z, line_width=1)
-    fig.add_vline(x=max(ccf_z - saggital_thickness/2, fig.layout.xaxis.range[0]), line_width=1, line_dash='dash')
-    fig.add_vline(x=min(ccf_z + saggital_thickness/2, fig.layout.xaxis.range[1]), line_width=1, line_dash='dash')
+    with container_coronal:
+        fig = plot_coronal_slice_unit(ccf_x, coronal_thickness, if_flip) #, [size_to_map, size_gamma, size_range], aggrid_outputs, ccf_z, saggital_thickness)
+        fig.add_vline(x=ccf_z, line_width=1)
+        fig.add_vline(x=max(ccf_z - saggital_thickness/2, fig.layout.xaxis.range[0]), line_width=1, line_dash='dash')
+        fig.add_vline(x=min(ccf_z + saggital_thickness/2, fig.layout.xaxis.range[1]), line_width=1, line_dash='dash')
 
-    selected_points_slice = plotly_events(fig, click_event=False, hover_event=False, select_event=False,
-                                          override_height=1500)
-    # st.write(selected_points_slice)
-    # st.plotly_chart(fig, use_container_width=True)
-
-with container_saggital:
-    fig = plot_saggital_slice_unit(ccf_z, saggital_thickness, if_flip) #, [size_to_map, size_gamma, size_range], aggrid_outputs, ccf_x, coronal_thickness)
-    selected_points_slice = plotly_events(fig, click_event=False, hover_event=False, select_event=False,
+        selected_points_slice = plotly_events(fig, click_event=False, hover_event=False, select_event=False,
                                             override_height=1500)
-    # st.plotly_chart(fig, use_container_width=True)
+        # st.write(selected_points_slice)
+        # st.plotly_chart(fig, use_container_width=True)
+
+    with container_saggital:
+        fig = plot_saggital_slice_unit(ccf_z, saggital_thickness, if_flip) #, [size_to_map, size_gamma, size_range], aggrid_outputs, ccf_x, coronal_thickness)
+        selected_points_slice = plotly_events(fig, click_event=False, hover_event=False, select_event=False,
+                                                override_height=1500)
+        # st.plotly_chart(fig, use_container_width=True)

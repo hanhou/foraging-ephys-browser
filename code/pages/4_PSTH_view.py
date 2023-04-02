@@ -15,7 +15,7 @@ from streamlit_util import *
 from util.z_score_psth import compute_group_tuning
 from util.plotly_util import add_plotly_errorbar
 
-from Home import add_unit_filter, init
+from Home import add_unit_filter, init, select_t_sign_level
 
 
 export_folder = 'aind-behavior-data/Han/ephys/export/psth/'
@@ -121,9 +121,8 @@ if 'df' not in st.session_state:
 
 with st.sidebar:
     add_unit_filter()
-    st.session_state.sign_level = st.number_input("significant level: t >= ", 
-                                                value=st.session_state.sign_level if 'sign_level' in st.session_state else 1.96, 
-                                                disabled=False, step=1.0) #'significant' not in heatmap_aggr_name, step=1.0)
+    with st.expander('t-value threshold', expanded=True):
+        select_t_sign_level()
 
 # z_tuning_mappper = {'dQ_go_cue_before_2': dict(align_to='go_cue', time_win=[-2, 0], latent_name='relative_action_value_lr', latent_variable_offset=-1),
 #                     'dQ_iti_start_before_1': dict(align_to='iti_start', time_win=[-1, 0], latent_name='relative_action_value_lr', ),

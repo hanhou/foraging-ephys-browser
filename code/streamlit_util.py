@@ -72,7 +72,7 @@ def aggrid_interactive_table_session(df: pd.DataFrame):
 
     return selection
 
-def aggrid_interactive_table_units(df: pd.DataFrame):
+def aggrid_interactive_table_units(df: pd.DataFrame, height=500):
     """Creates an st-aggrid interactive table based on a dataframe.
 
     Args:
@@ -103,7 +103,7 @@ def aggrid_interactive_table_units(df: pd.DataFrame):
         theme="balham",
         update_mode=GridUpdateMode.SELECTION_CHANGED | GridUpdateMode.FILTERING_CHANGED,
         allow_unsafe_jscode=True,
-        height=500,
+        height=height,
         columns_auto_size_mode=ColumnsAutoSizeMode.FIT_CONTENTS,
         custom_css=custom_css,
     )

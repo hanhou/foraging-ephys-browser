@@ -8,6 +8,7 @@ import numpy as np
 from datetime import datetime
 import s3fs
 import os
+from scipy.stats import norm
 
 from PIL import Image, ImageColor
 import streamlit.components.v1 as components
@@ -38,9 +39,6 @@ else:
     
     fs = s3fs.S3FileSystem(anon=False)
     use_s3 = True
-
-if 'selected_points' not in st.session_state:
-    st.session_state['selected_points'] = []
 
     
 @st.cache_data(ttl=24*3600)
@@ -84,8 +82,12 @@ def add_unit_filter():
         # Join with df_period_linear_fit_all here! (A huge dataframe with all things merged (flattened multi-level columns)
         st.session_state.df_unit_filtered_merged = st.session_state.df_unit_filtered.set_index(st.session_state.unit_key_names
                                                                                         ).join(st.session_state.df['df_period_linear_fit_all'], how='inner')
-        
-    st.markdown(f"### {len(st.session_state.df_unit_filtered)} units filtered")
+    
+    n_units = len(st.session_state.df_unit_filtered)
+    n_animal = len(st.session_state.df_unit_filtered['subject_id'].unique())
+    n_insertion = len(st.session_state.df_unit_filtered.groupby(['subject_id', 'session', 'insertion_number']))
+                      
+    st.markdown(f"### Filtered: {len(st.session_state.df_unit_filtered)} units, {n_animal} animals, {n_insertion} insertions")
 
 
 # For pure units
@@ -128,12 +130,34 @@ def compute_pure_polar_classification(t_sign_level=1.96):
                 if_pure_this = if_pure_this & (np.sqrt(x ** 2 + y ** 2) >= t_sign_level)
                 df[period, model, f'{unit_class}', ''] = if_pure_this.astype(int)
 
+# --- t and p-value threshold ---
+
+t_to_p = lambda t: 2 * norm.sf(t)
+p_to_t = lambda p: norm.ppf(1 - p / 2)
+
 def _on_change_t_sign_level():
-    compute_pure_polar_classification(t_sign_level=st.session_state.t_sign_level)
+    compute_pure_polar_classification(t_sign_level=st.session_state['t_sign_level'])
     
+def select_t_sign_level(col=st):
+    t_now = st.session_state['t_sign_level'] if 't_sign_level' in st.session_state else 1.96   # Note: use ['xxx'] instead of .xxx!!
+    return col.slider(f'Significant level = t > {t_now:.3g} (p < {t_to_p(t_now):.2g})', 
+                      1.0, 5.0, 
+                      value=t_now,
+                      key='t_sign_level',
+                      on_change=_on_change_t_sign_level)
+    # return col.number_input(f"significant level: t >= {st.session_state['t_sign_level']}", 
+    #                                                  value=st.session_state['t_sign_level'], 
+    #                                                  min_value=0.0, step=0.1,
+    #                                                 key='t_sign_level',
+    #                                                 on_change=_on_change_t_sign_level)   # Update pure polar classification
 
 def init():
-    st.set_page_config(layout="wide", page_title='Foraging unit navigator')
+    st.set_page_config(layout="wide", page_title='Foraging ephys browser',
+                       page_icon='⚡',
+                       menu_items={
+                        'Report a bug': "https://github.com/hanhou/foraging-ephys-browser/issues",
+                        'About': "Github repo: https://github.com/hanhou/foraging-ephys-browser/",
+                    })
 
     df = load_data(['sessions', 'df_ephys_units', 'aoi', 'df_period_linear_fit_all'])
     st.session_state.df = df
@@ -152,6 +176,9 @@ def init():
     
     # Add pure polar classification
     compute_pure_polar_classification()
+    
+    # Other stuff
+    st.session_state['selected_points'] = []
     
         
 # ------- Layout starts here -------- #    

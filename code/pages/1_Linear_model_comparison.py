@@ -1,7 +1,6 @@
 import streamlit as st
 import numpy as np
 import pandas as pd
-from scipy.stats import norm
 
 import plotly.graph_objs as go
 import plotly.express as px
@@ -10,7 +9,7 @@ from plotly.subplots import make_subplots
 from streamlit_plotly_events import plotly_events
 import extra_streamlit_components as stx
 
-from Home import add_unit_filter, init, _to_theta_r, _on_change_t_sign_level, pure_unit_color_mapping, polar_classifiers
+from Home import add_unit_filter, init, _to_theta_r, select_t_sign_level, t_to_p, p_to_t, pure_unit_color_mapping, polar_classifiers
 
 if 'df' not in st.session_state: 
     init()
@@ -65,9 +64,6 @@ para_name_mapper = {'relative_action_value_ic': 'dQ',
                     **{f'firing_{n}_back': f'firing {n} back' for n in range(1, 11)},
                     }
 
-# Prepare p and t mapping
-t_value = np.linspace(0, 5, 500)
-type_1_error = 2 * norm.sf(t_value)
 
 # For significant proportion
 sig_prop_vars = ['relative_action_value_ic', 'total_action_value', 
@@ -95,7 +91,7 @@ def plot_model_comparison():
     
     return fig
 
-@st.cache_data(max_entries=100)
+@st.cache_data(max_entries=100, show_spinner=False)
 def plot_t_distribution(df_period_linear_fit, periods, paras, to_compare='models'):
 
     fig = make_subplots(rows=len(paras), cols=len(periods), 
@@ -105,6 +101,8 @@ def plot_t_distribution(df_period_linear_fit, periods, paras, to_compare='models
                         vertical_spacing=0.02,
                         x_title='Threshold for abs(t)',
                         )
+    
+    progress_bar = st.columns([1, 15])[0].progress(0, text='0%')
 
     for row, para in enumerate(paras):
         for col, period in enumerate(periods):
@@ -145,7 +143,7 @@ def plot_t_distribution(df_period_linear_fit, periods, paras, to_compare='models
                 for area, color in st.session_state.aoi_color_mapping.items():
                     hist, x = np.histogram(df.query(f'area_of_interest == "{area}"')['abs(t)'], bins=100)
                     n = np.sum(hist)
-                    sign_ratio = 1 - np.cumsum(hist) / n if n > 0 else np.nan
+                    sign_ratio = 1 - np.cumsum(hist) / n if n > 0 else np.full_like(hist, np.nan)
                     fig.add_trace(go.Scattergl(x=(x[:-1] + x[1:])/2, 
                                                 y=sign_ratio,
                                                 mode='lines',
@@ -161,8 +159,8 @@ def plot_t_distribution(df_period_linear_fit, periods, paras, to_compare='models
                                 row=row+1, col=col+1)
                     
             # t-value
-            fig.add_trace(go.Scatter(x=t_value,
-                                    y=type_1_error,
+            fig.add_trace(go.Scatter(x=np.linspace(0, 5, 500),
+                                    y=t_to_p(np.linspace(0, 5, 500)),
                                     mode='lines',
                                     name='Type I error',
                                     legendgroup='err',
@@ -174,6 +172,10 @@ def plot_t_distribution(df_period_linear_fit, periods, paras, to_compare='models
 
             fig.add_vline(x=2.0, line_color='gray', line_dash='dash',
                         row=row+1, col=col+1)
+            
+            finished = (row * len(periods) + col + 1) / (len(periods) * len(paras))
+            progress_bar.progress(finished, text=f'{finished:.0%}')
+
 
     for row, para in enumerate(paras):
         fig['layout'][f'yaxis{1 + row * len(periods)}']['title'] = para_name_mapper[para]
@@ -184,6 +186,8 @@ def plot_t_distribution(df_period_linear_fit, periods, paras, to_compare='models
     fig.update_layout(width=min(2000, 400 + 270 * len(periods)), 
                       height=200 + 240 * len(paras),
                      font_size=17, hovermode='closest',
+                     title= f'(Total number of units = {len(df_period_linear_fit)})',
+                     title_x=0.01,
                      )
     fig.update_annotations(font_size=20)
         
@@ -196,7 +200,7 @@ def _sig_proportion(ts, t_sign_level):
 
 
 def plot_unit_sig_prop_bar(aois, period, t_sign_level):
-    p_value = type_1_error[np.searchsorted(t_value, t_sign_level)]
+    p_value = t_to_p(t_sign_level)
     
     model_groups = {('dQ, sumQ, rpe', 'contraQ, ipsiQ, rpe'): ['simple model',   # Name
                                                                [p for p in sig_prop_vars if 'action_value' in p or p in ['rpe']], # Para to include
@@ -272,7 +276,7 @@ def _pure_proportion(x):
     return prop * 100, ci_95 * 100, len(x)
 
 def plot_unit_pure_sig_prop_bar(aois, period, t_sign_level, model='dQ, sumQ, rpe'):
-    p_value = type_1_error[np.searchsorted(t_value, t_sign_level)]    
+    p_value = t_to_p(t_sign_level)
 
     model_groups = {(model): ['simple model',   # Name
                                 polar_classifiers[model][1].keys(), # Para to include
@@ -377,43 +381,52 @@ def plot_unit_class_scatter(period, model='dQ, sumQ, rpe'):
             
     return figs
 
-def select_period(multi=True, label='Periods to draw', col=st):
+def select_period(multi=True, label='Periods to plot', 
+                  default_period='iti_all',
+                  col=st, suffix=''):
     if multi:
         period_names = col.multiselect(label, 
                                    period_name_mapper.values(),
-                                   [period_name_mapper[p] for p in period_name_mapper if p!= 'delay'])
+                                   [period_name_mapper[p] for p in period_name_mapper if p!= 'delay'],
+                                   key=f'period_names{suffix}')
         return period_names, [p for p in period_name_mapper if period_name_mapper[p] in period_names]
     else:
         period_name = col.selectbox(label, 
                                     period_name_mapper.values(),
-                                    list(period_name_mapper.keys()).index('iti_all'))
+                                    list(period_name_mapper.keys()).index(default_period),
+                                    key=f'period_name{suffix}')
         return period_name, [p for p in period_name_mapper if period_name_mapper[p] == period_name][0]
 
 def select_model(available_models=list(model_name_mapper.keys()),
                  default_model='dQ, sumQ, rpe, C*2, R*5, t',
                 label='Model to plot', 
+                suffix='',
                 col=st):
     model_name = col.selectbox(label,
                                [model_name_mapper[m] for m in available_models], 
-                                available_models.index(default_model))
+                                available_models.index(default_model),
+                                key=f'model_name{suffix}')
     model = [m for m in model_name_mapper if model_name_mapper[m] == model_name][0]
     return model_name, model
 
 def select_para(multi=True,
                 available_paras=list(para_name_mapper.keys()), 
                 default_paras='relative_action_value_ic', 
-                label='Variables to draw',
+                label='Variables to plot',
+                suffix='',
                 col=st):
     if multi:
         para_names = col.multiselect(label, 
                                  [para_name_mapper[p] for p in available_paras],
                                  [para_name_mapper[p] for p in default_paras],
+                                 key=f'para_names{suffix}'
                                  )
         return para_names, [p for p in para_name_mapper if para_name_mapper[p] in para_names]
     else:
         para_name = col.selectbox(label, 
                                   [para_name_mapper[p] for p in available_paras],
                                   available_paras.index(default_paras),
+                                  key=f'para_name{suffix}'
                                   )
         return para_name, [p for p in para_name_mapper if para_name_mapper[p] == para_name][0]
 
@@ -469,7 +482,6 @@ if __name__ == '__main__':
         
         if aois and paras and periods:
             df_period_linear_fit = df_period_linear_fit_filtered.query('area_of_interest in @aois')
-            st.markdown(f'#### N = {len(df_period_linear_fit)}')
             fig = plot_t_distribution(df_period_linear_fit=df_period_linear_fit, 
                                     periods=periods, 
                                     paras=paras,
@@ -516,22 +528,23 @@ if __name__ == '__main__':
             plotly_events(fig, override_height=fig.layout.height*1.1, override_width=fig.layout.width, click_event=False)
 
     elif chosen_id == 'tab4':
+        with st.sidebar:
+            with st.expander('t-value threshold', expanded=True):
+                t_sign_level = select_t_sign_level()
+        
         cols = st.columns([1, 2, 1])
         period = cols[0].selectbox('period', 
                                    period_name_mapper.values(), 
                                    list(period_name_mapper.keys()).index('iti_all'))
         
         _period = [p for p in period_name_mapper if period_name_mapper[p] == period][0]
-        t_sign_level = cols[0].slider('t value threshold', 1.0, 5.0, 1.96,
-                                      key='t_sign_level',
-                                      on_change=_on_change_t_sign_level)
         aois = cols[1].multiselect('Areas to include', st.session_state.aoi_color_mapping.keys(), st.session_state.aoi_color_mapping)
         
         # -- bar plot of significant units --
         with st.expander('Bar plot of significant units', expanded=True):
             fig = plot_unit_sig_prop_bar(period=_period,
                                         aois=aois,
-                                        t_sign_level=t_sign_level)
+                                        t_sign_level=st.session_state['t_sign_level'])
             
             st.plotly_chart(fig, use_container_width=True) # Only plotly_chart keeps the bar plot pattern
         
@@ -541,7 +554,7 @@ if __name__ == '__main__':
             model = {'dQ + sumQ + ...': 'dQ, sumQ, rpe', 'contraQ + ipsiQ + ...': 'contraQ, ipsiQ, rpe'}[model_name]
             fig = plot_unit_pure_sig_prop_bar(period=_period,
                                             aois=aois,
-                                            t_sign_level=t_sign_level,
+                                            t_sign_level=st.session_state['t_sign_level'],
                                             model=model)        
             st.plotly_chart(fig, use_container_width=True) # Only plotly_chart keeps the bar plot pattern
 

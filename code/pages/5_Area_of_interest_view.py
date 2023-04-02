@@ -3,8 +3,11 @@ import plotly.express as px
 import plotly.graph_objects as go
 import numpy as np
 
-from streamlit_plotly_events import plotly_events
-from Home import add_unit_filter, get_fig_unit_all_in_one, init
+from Home import add_unit_filter, get_fig_unit_all_in_one, init, select_t_sign_level
+
+import importlib
+package_xy_view = importlib.import_module('.3_X-Y_view', package='pages')
+
 
 if 'df' not in st.session_state: 
     init()
@@ -20,48 +23,6 @@ sig_prop_color_mapping =  {'dQ': 'darkviolet',
                             'ipsiQ': 'darkorange',
                             'rpe': 'gray'}
 
-@st.cache_data(ttl=24*3600)
-def plot_scatter(data, x_name='dQ_iti', y_name='sumQ_iti', if_use_ccf_color=False, sign_level=1.96, x_abs=False, y_abs=False):
-    
-    fig = go.Figure()
-    
-    for aoi in st.session_state.df['aoi'].index:
-        if aoi not in st.session_state.df_unit_filtered.area_of_interest.values:
-            continue
-        
-        this_aoi = data.query(f'area_of_interest == "{aoi}"')
-        fig.add_trace(go.Scatter(x=np.abs(this_aoi[x_name]) if x_abs else this_aoi[x_name], 
-                                 y=np.abs(this_aoi[y_name]) if y_abs else this_aoi[y_name],
-                                 mode="markers",
-                                 marker_color=st.session_state.aoi_color_mapping[aoi] if if_use_ccf_color else None,
-                                 name=aoi))
-        
-    # fig = px.scatter(data, x=x_name, y=y_name, 
-    #                 color='area_of_interest', symbol="area_of_interest",
-    #                 hover_data=['annotation'],
-    #                 color_discrete_map=aoi_color_mapping if if_use_ccf_color else None)
-    
-    if 't_' in x_name:
-        fig.add_vline(x=sign_level, line_width=1, line_dash="dash", line_color="black")
-        if not x_abs: 
-            fig.add_vline(x=-sign_level, line_width=1, line_dash="dash", line_color="black")
-    if 't_' in y_name:
-        fig.add_hline(y=sign_level, line_width=1, line_dash="dash", line_color="black")
-        if not y_abs:
-            fig.add_hline(y=-sign_level, line_width=1, line_dash="dash", line_color="black")
-        
-    # fig.update_xaxes(range=[-40, 40])
-    # fig.update_yaxes(range=[-40, 40])
-    
-    fig.update_layout(width=900, height=800, font=dict(size=20), xaxis_title=x_name, yaxis_title=y_name)
-    
-    if all(any([s in name for s in ['t_', 'beta_']]) for name in [x_name, y_name]):
-        fig.update_yaxes(
-            scaleanchor = "x",
-            scaleratio = 1,
-        )
-            
-    return fig
 
 
 
@@ -134,37 +95,6 @@ def plot_polar(df_unit_filtered, x_name, y_name, polar_method, n_bins, if_errorb
     return fig
 
 
-def add_scatter_return_selected(data, x_name, y_name, x_abs=False, y_abs=False):
-    if len(data):
-        if_use_ccf_color = st.checkbox("Use ccf color", value=True)
-        fig = plot_scatter(data, x_name=x_name, y_name=y_name, 
-                            if_use_ccf_color=if_use_ccf_color, 
-                            sign_level=st.session_state.sign_level,
-                            x_abs=x_abs,
-                            y_abs=y_abs)
-        
-        if len(st.session_state.selected_points):
-            fig.add_trace(go.Scatter(x=[st.session_state.selected_points[0]['x']], 
-                                     y=[st.session_state.selected_points[0]['y']], 
-                                mode='markers',
-                                marker_symbol='star',
-                                marker_size=15,
-                                marker_color='black',
-                                name='selected'))
-            
-        # if 'selected_points_scatter' in st.session_state and len(st.session_state.selected_points_scatter):
-        #     fig.add_trace(go.Scatter(x=[pt['x'] for pt in st.session_state.selected_points_scatter], 
-        #                         y=[pt['y'] for pt in st.session_state.selected_points_scatter], 
-        #                         mode='markers',
-        #                         marker_symbol='star',
-        #                         marker_size=15,
-        #                         marker_color='black',
-        #                         name='selected'))            
-        
-        # Select other Plotly events by specifying kwargs
-        selected_points_scatter = plotly_events(fig, click_event=True, hover_event=False, select_event=True,
-                                                override_height=800, override_width=800, key='unit_scatter')
-    return selected_points_scatter
 
 def add_xy_selector():
     with st.expander("Select axes", expanded=True):
@@ -185,9 +115,7 @@ def _to_theta_r(x, y):
 def app():
     with st.sidebar:
         add_unit_filter()
-        st.session_state.sign_level = st.number_input("significant level: t >= ", 
-                                                      value=st.session_state.sign_level if 'sign_level' in st.session_state else 1.96, 
-                                                      disabled=False, step=1.0) #'significant' not in heatmap_aggr_name, step=1.0)
+        select_t_sign_level()
    
     # -- axes selector --
     x_name, y_name = add_xy_selector()
@@ -195,7 +123,7 @@ def app():
     # -- scatter --
     col1, col2 = st.columns((1, 1))
     with col1:  # Raw scatter
-        selected_points_scatter = add_scatter_return_selected(st.session_state.df_unit_filtered, x_name, y_name)
+        selected_points_scatter = package_xy_view.add_scatter_return_selected(st.session_state.df_unit_filtered, x_name, y_name)
                     
         
     with col2: # Polar distribution
@@ -211,7 +139,8 @@ def app():
             with col23:
                 if_errorbar = st.checkbox("binomial 95% CI", value=True, disabled='in all neurons' not in polar_method)
                         
-            fig = plot_polar(st.session_state.df_unit_filtered, x_name, y_name, polar_method, n_bins, if_errorbar, st.session_state.sign_level)
+            fig = plot_polar(st.session_state.df_unit_filtered, x_name, y_name, polar_method, n_bins, if_errorbar, 
+                             st.session_state['t_sign_level'])
 
             # # Select other Plotly events by specifying kwargs
             # selected_points_scatter = plotly_events(fig, click_event=True, hover_event=False, select_event=False,
