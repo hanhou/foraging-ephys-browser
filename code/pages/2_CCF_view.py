@@ -74,9 +74,9 @@ def draw_ccf_annotations(fig, slice, slice_name, edges, message):
     traces = go.Image(source=img_str, x0=0, y0=0, dx=CCF_RESOLUTION, dy=CCF_RESOLUTION,
                       hovertemplate=hovertemplate, customdata=slice_name)
     fig.add_trace(traces)
-    fig.add_trace(go.Scatter(
+    fig.add_trace(go.Scattergl(
         x=[300, 300],
-        y=[0, 300],
+        y=[300, 600],
         mode='text',
         text=message,
         textfont=dict(size=20),
@@ -86,7 +86,7 @@ def draw_ccf_annotations(fig, slice, slice_name, edges, message):
     
     # -- overlay edges
     xx, yy = edges
-    fig.add_trace(go.Scatter(x=yy * CCF_RESOLUTION, y=xx * CCF_RESOLUTION, 
+    fig.add_trace(go.Scattergl(x=yy * CCF_RESOLUTION, y=xx * CCF_RESOLUTION, 
                              mode='markers',
                              marker={'color': 'rgba(0, 0, 0, 0.3)', 'size': 2},
                              hoverinfo='skip',
@@ -183,13 +183,13 @@ def draw_ccf_heatmap(fig, x, y, z, slice_name):
 def draw_ccf_units(fig, x, y, z, aoi, uid, annot):
     x = x + np.random.random(x.shape) * 30    
     if sum(z < 0) == 0:   # All positive values
-        fig.add_trace(go.Scatter(x=x, 
+        fig.add_trace(go.Scattergl(x=x, 
                                 y=y,
                                 mode = 'markers',
                                 marker_size = _size_mapping(z),
                                 # continuous_color_scale = 'RdBu',
                                 marker = {'color': 'rgba(0, 0, 0, 0.8)', 
-                                          'line': dict(width=1, color='white')},
+                                          'line': dict(width=1.2, color='white')},
                                 hovertemplate= '"%{customdata[0]}"' + 
                                                 '<br>%{text}' +
                                                 '<br>%s = %%{customdata[1]}' % column_to_map_name +
@@ -201,12 +201,12 @@ def draw_ccf_units(fig, x, y, z, aoi, uid, annot):
                                 ))
     else:  # Negative: red (for unit_stats: ipsi), positive: blue (for unit_stats: contra)
         for select_z, col in zip((z < 0, z >= 0), ('rgba(255, 0, 0, 0.8)', 'rgba(0, 0, 255, 0.8)')):
-            fig.add_trace(go.Scatter(x=x[select_z], 
+            fig.add_trace(go.Scattergl(x=x[select_z], 
                                     y=y[select_z],
                                     mode = 'markers',
                                     marker_size = _size_mapping(abs(z[select_z])),
                                     # continuous_color_scale = 'RdBu',
-                                    marker = {'color': col, 'line': dict(width=1, color='white')},
+                                    marker = {'color': col, 'line': dict(width=1.2, color='white')},
                                     hovertemplate= '"%{customdata[0]}"' + 
                                                     '<br>%{text}' +
                                                     '<br>%s = %%{customdata[1]}' % column_to_map_name +
@@ -271,7 +271,7 @@ def plot_coronal_slice_unit(ccf_x, coronal_slice_thickness, if_flip, *args):
     fig.update_layout(width=800 if if_flip else 1000, 
                       height= 1000,
                       xaxis_range=[0, 5700 if if_flip else 5700*2],
-                      yaxis_range=[8000, 0],
+                      yaxis_range=[8000, -10],
                       xaxis_title='ccf_z (left -> right)',
                       yaxis_title='ccf_y (superior -> inferior)',
                       font=dict(size=20),
@@ -327,7 +327,7 @@ def plot_saggital_slice_unit(ccf_z, saggital_slice_thickness, if_flip, *args):
     fig.update_layout(width=1300, 
                       height=1000,
                       xaxis_range=[0, 10000],
-                      yaxis_range=[8000, 0],
+                      yaxis_range=[8000, -10],
                       xaxis_title='ccf_x (anterior -> posterior)',
                       yaxis_title='ccf_y (superior -> inferior)',
                       font=dict(size=20),
@@ -363,7 +363,7 @@ def _ccf_heatmap_available_aggr_funcs(column_to_map):
 def _ccf_heatmap_get_aggr_func_and_range(heatmap_aggr_name, column_to_map, value_to_map):
     
     if isinstance(column_to_map, tuple) and column_to_map[2] == 't':
-        heatmap_range = (0.0, 15.0, 0.1, 5.0 if if_bi_directional_heatmap else (2.0, 5.0))
+        heatmap_range = (0.0, 10.0, 0.01, 5.0 if if_bi_directional_heatmap else (2.0, 5.0))
     else:
         range_min = float(np.quantile(np.abs(value_to_map), 0.05))
         range_default = float(np.quantile(np.abs(value_to_map), 0.8))
@@ -515,13 +515,13 @@ with container_coronal:
     fig.add_vline(x=max(ccf_z - saggital_thickness/2, fig.layout.xaxis.range[0]), line_width=1, line_dash='dash')
     fig.add_vline(x=min(ccf_z + saggital_thickness/2, fig.layout.xaxis.range[1]), line_width=1, line_dash='dash')
 
-    selected_points_slice = plotly_events(fig, click_event=True, hover_event=False, select_event=False,
+    selected_points_slice = plotly_events(fig, click_event=False, hover_event=False, select_event=False,
                                           override_height=1500)
     st.write(selected_points_slice)
     # st.plotly_chart(fig, use_container_width=True)
 
 with container_saggital:
     fig = plot_saggital_slice_unit(ccf_z, saggital_thickness, if_flip) #, [size_to_map, size_gamma, size_range], aggrid_outputs, ccf_x, coronal_thickness)
-    selected_points_slice = plotly_events(fig, click_event=True, hover_event=False, select_event=False,
+    selected_points_slice = plotly_events(fig, click_event=False, hover_event=False, select_event=False,
                                             override_height=1500)
     # st.plotly_chart(fig, use_container_width=True)
