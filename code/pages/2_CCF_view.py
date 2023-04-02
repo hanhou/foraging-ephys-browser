@@ -28,6 +28,7 @@ def _get_min_max():
     return np.percentile(x_gamma_all, 5), np.percentile(x_gamma_all, 95)
 
 def _size_mapping(x):
+    x = x / np.quantile(x, 0.95)
     x_gamma = x**size_gamma
     min_x, max_x = _get_min_max()
     return size_range[0] + x_gamma / (max_x - min_x) * (size_range[1] - size_range[0])
@@ -353,22 +354,37 @@ def _ccf_heatmap_available_aggr_funcs(column_to_map):
     if 'pure' in column_to_map:
         return [r'% pure units']
     
-    if isinstance(column_to_map, tuple):  # Unit tuning
-        if column_to_map[2] == 't':
-            return [r'% significant units', 'median', 'median (significant only)', 'mean', 'mean (significant only)']
+    if isinstance(column_to_map, tuple) and column_to_map[2] == 't':  # Unit tuning
+        return [r'% significant units', 'median', 'median (significant only)', 'mean', 'mean (significant only)']
     
     return ['median', 'mean']
         
 
-def _ccf_heatmap_get_aggr_func(heatmap_aggr_name, column_to_map):
-    heatmap_aggr_func_mapping = {    # func, (min, max, step, default)
-        'median': ('median', (0.0, 15.0, 0.1, 5.0 if if_bi_directional_heatmap else (2.0, 5.0))),  
-        'median (significant only)': (lambda x: np.median(x[np.abs(x) >= sign_level]), (0.0, 15.0, 0.1, 5.0 if if_bi_directional_heatmap else (2.0, 5.0))),  
-        'mean': ('mean', (0.0, 15.0, 0.1, 5.0 if if_bi_directional_heatmap else (2.0, 5.0))),
-        'mean (significant only)': (lambda x: np.mean(x[np.abs(x) >= sign_level]), (0.0, 15.0, 0.1, 5.0 if if_bi_directional_heatmap else (2.0, 5.0))),
-        r'% significant units': (lambda x: sum(np.abs(x) >= sign_level) / len(x) * 100, (5, 100, 5, (30, 80))),
-        'number of units': (lambda x: len(x) if len(x) else np.nan, (0, 50, 5, (0, 20))),
-        r'% pure units': (lambda x: sum(x) / len(x) * 100, (0, 100, 1, (5, 80))),
+def _ccf_heatmap_get_aggr_func_and_range(heatmap_aggr_name, column_to_map, value_to_map):
+    
+    if isinstance(column_to_map, tuple) and column_to_map[2] == 't':
+        heatmap_range = (0.0, 15.0, 0.1, 5.0 if if_bi_directional_heatmap else (2.0, 5.0))
+    else:
+        range_min = float(np.quantile(np.abs(value_to_map), 0.05))
+        range_default = float(np.quantile(np.abs(value_to_map), 0.8))
+        range_max = float(np.quantile(np.abs(value_to_map), 0.99))
+        heatmap_range = (0.0, range_max, range_max/100, range_default if if_bi_directional_heatmap else (range_min, range_default))      
+
+    heatmap_aggr_func_mapping = {    
+        # func, (min, max, step, default)
+        'median': ('median', heatmap_range),        
+        'median (significant only)': (lambda x: np.median(x[np.abs(x) >= sign_level]), heatmap_range),      
+        'mean': ('mean', heatmap_range),
+        'mean (significant only)': (lambda x: np.mean(x[np.abs(x) >= sign_level]), heatmap_range),
+        
+        r'% significant units': (lambda x: sum(np.abs(x) >= sign_level) / len(x) * 100, 
+                                 (5, 100, 5, (5, 50))),
+        
+        'number of units': (lambda x: len(x) if len(x) else np.nan, 
+                            (0, 50, 5, (0, 20))),
+        
+        r'% pure units': (lambda x: sum(x) / len(x) * 100, 
+                          (0, 100, 1, (5, 80))),
         
         # 'max': ('max', (0.0, 15.0, 1.0, (0.0, 5.0))),
         # 'min': ('min', (0.0, 15.0, 1.0, (0.0, 5.0))),
@@ -425,7 +441,7 @@ with st.sidebar:
         values_to_map = st.session_state.df_unit_filtered_merged[column_to_map].values
         values_to_map = values_to_map[~np.isnan(values_to_map)]
         
-        if_take_abs = st.checkbox("Use abs()?", value=False)
+        if_take_abs = st.checkbox("Use abs()?", value=False) if any(values_to_map < 0) else False
         if if_take_abs:
             values_to_map = np.abs(values_to_map)
             
@@ -440,10 +456,10 @@ with st.sidebar:
                             margin=dict(l=0, r=0, t=0, b=0))
             st.plotly_chart(fig, use_container_width=True)
                         
-        if_ccf_plot_scatter = st.checkbox("Draw units", value=column_to_map != 'number_units') 
+        if_ccf_plot_scatter = st.checkbox("Draw units", value=True) if column_to_map != 'number_units' else False
         if if_ccf_plot_scatter:       
             with st.expander("Unit settings", expanded=True):
-                size_range = st.slider("size range", 0, 50, (0, 10))
+                size_range = st.slider("size range", 0, 100, (0, 50))
                 size_gamma = st.slider("gamma", min_value=0.0, max_value=2.0, value=1.0, step=0.1)
         
         if_ccf_plot_heatmap = st.checkbox("Draw heatmap", value=True)
@@ -461,7 +477,7 @@ with st.sidebar:
                     sign_level = st.number_input("significant level: t >= ", value=2.57, min_value=0.0, step=0.1) #'significant' not in heatmap_aggr_name, step=1.0)
 
                 if_bi_directional_heatmap = (any(values_to_map < 0) + any(values_to_map > 0)) == 2 and r'%' not in heatmap_aggr_name 
-                heatmap_aggr_func, heatmap_color_ranges = _ccf_heatmap_get_aggr_func(heatmap_aggr_name, column_to_map)
+                heatmap_aggr_func, heatmap_color_ranges = _ccf_heatmap_get_aggr_func_and_range(heatmap_aggr_name, column_to_map, values_to_map)
                 heatmap_color_range = st.slider(f"Heatmap color range ({heatmap_aggr_name})", 
                                                 heatmap_color_ranges[0], heatmap_color_ranges[1],
                                                 step=heatmap_color_ranges[2], value=heatmap_color_ranges[3])
