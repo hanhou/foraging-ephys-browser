@@ -22,10 +22,10 @@ with st.sidebar:
 df_period_linear_fit_all = st.session_state.df['df_period_linear_fit_all']
 unit_key_names = ['subject_id', 'session', 'insertion_number', 'unit']
 # Filter df and add area_of_interest to the index
-df_period_linear_fit_all = df_period_linear_fit_all.loc[st.session_state.df_unit_filtered.set_index(unit_key_names).index, :]
-df_aoi_filtered = st.session_state.df['df_ephys_units'].set_index(unit_key_names).loc[df_period_linear_fit_all.index, :]
+df_period_linear_fit_filtered = df_period_linear_fit_all.loc[st.session_state.df_unit_filtered.set_index(unit_key_names).index, :]
+df_aoi_filtered = st.session_state.df['df_ephys_units'].set_index(unit_key_names).loc[df_period_linear_fit_filtered.index, :]
 aoi_index = df_aoi_filtered.reset_index().set_index(unit_key_names + ['area_of_interest'])
-df_period_linear_fit_all.index = aoi_index.index
+df_period_linear_fit_filtered.index = aoi_index.index
 
 plotly_font = lambda x: dict(xaxis_tickfont_size=x,
                             xaxis_title_font_size=x,
@@ -98,7 +98,7 @@ polar_classifiers = {'dQ, sumQ, rpe': [{'x_name': 'relative_action_value_ic', 'y
 
 @st.cache_data(max_entries=100)
 def plot_model_comparison():
-    df_period_linear_fit_melt = df_period_linear_fit_all.iloc[:, df_period_linear_fit_all.columns.get_level_values(-2)=='rel_bic'
+    df_period_linear_fit_melt = df_period_linear_fit_filtered.iloc[:, df_period_linear_fit_filtered.columns.get_level_values(-2)=='rel_bic'
                                                             ].stack(level=[0, 1]
                                                                     ).droplevel(axis=1, level=1
                                                                                 ).reset_index()
@@ -232,7 +232,7 @@ def plot_unit_sig_prop_bar(aois, period, t_sign_level):
         paras = model_group_setting[1]
         for para in paras:
             color = sig_prop_color_mapping[para]
-            prop_ci = df_period_linear_fit_all.loc[:, (period, model_group, 't', para)
+            prop_ci = df_period_linear_fit_filtered.loc[:, (period, model_group, 't', para)
                                                   ].groupby('area_of_interest'
                                                             ).agg(lambda x: _sig_proportion(x, t_sign_level))
             
@@ -306,17 +306,17 @@ def plot_unit_pure_sig_prop_bar(aois, period, t_sign_level, model='dQ, sumQ, rpe
     for model_group, model_group_setting in model_groups.items():
         
         # Compute the proportions of pure neurons from dQ / sumQ 
-        x = df_period_linear_fit_all.loc[:, (period, model_group, 't', polar_classifiers[model][0]['x_name'])].values
-        y = df_period_linear_fit_all.loc[:, (period, model_group, 't', polar_classifiers[model][0]['y_name'])].values
+        x = df_period_linear_fit_filtered.loc[:, (period, model_group, 't', polar_classifiers[model][0]['x_name'])].values
+        y = df_period_linear_fit_filtered.loc[:, (period, model_group, 't', polar_classifiers[model][0]['y_name'])].values
         theta, _ = _to_theta_r(x, y)
 
         for unit_class, ranges in polar_classifiers[model][1].items():
             color = pure_unit_color_mapping[unit_class]
             this = np.any([(a_min < theta) & (theta < a_max) for a_min, a_max in ranges], axis=0) 
             this = this & (np.sqrt(x ** 2 + y ** 2) >= t_sign_level)
-            df_period_linear_fit_all[period, model_group, f'{unit_class}', ''] = this
+            df_period_linear_fit_filtered[period, model_group, f'{unit_class}', ''] = this
           
-            prop_ci = df_period_linear_fit_all[period, model_group, f'{unit_class}', ''].groupby('area_of_interest').apply(_pure_proportion)  
+            prop_ci = df_period_linear_fit_filtered[period, model_group, f'{unit_class}', ''].groupby('area_of_interest').apply(_pure_proportion)  
                         
             # filtered_aoi = [aoi for aoi in st.session_state.df['aoi'].index if aoi in prop_ci.index and aoi in aois] # Sort according to st.session_state.df['aoi'].index
             filtered_aoi = [aoi for aoi in aois if aoi in prop_ci.index and aoi in aois]
@@ -378,10 +378,10 @@ def plot_unit_class_scatter(period, model='dQ, sumQ, rpe'):
     for i, (model, descr) in enumerate(models.items()):
         fig = go.Figure()
         for unit_class, color in pure_unit_color_mapping.items():
-            this = df_period_linear_fit_all[period, (model), f'{unit_class}', '']
+            this = df_period_linear_fit_filtered[period, (model), f'{unit_class}', '']
                 
-            fig.add_trace(go.Scattergl(x=df_period_linear_fit_all[period, (model), 't', x_name][this], 
-                                       y=df_period_linear_fit_all[period, (model), 't', y_name][this], 
+            fig.add_trace(go.Scattergl(x=df_period_linear_fit_filtered[period, (model), 't', x_name][this], 
+                                       y=df_period_linear_fit_filtered[period, (model), 't', y_name][this], 
                                        mode='markers',
                                        marker=dict(symbol='circle', size=7, opacity=0.3, 
                                                 line=dict(color=color, width=1.5),
@@ -404,12 +404,17 @@ def plot_unit_class_scatter(period, model='dQ, sumQ, rpe'):
             
     return figs
 
-def select_periods(label='Periods to draw', col=st):
-    period_names = col.multiselect(label, 
-                                period_name_mapper.values(),
-                                [period_name_mapper[p] for p in period_name_mapper if p!= 'delay'])
-    periods = [p for p in period_name_mapper if period_name_mapper[p] in period_names]
-    return period_names, periods
+def select_period(multi=True, label='Periods to draw', col=st):
+    if multi:
+        period_names = col.multiselect(label, 
+                                   period_name_mapper.values(),
+                                   [period_name_mapper[p] for p in period_name_mapper if p!= 'delay'])
+        return period_names, [p for p in period_name_mapper if period_name_mapper[p] in period_names]
+    else:
+        period_name = col.selectbox(label, 
+                                    period_name_mapper.values(),
+                                    list(period_name_mapper.keys()).index('iti_all'))
+        return period_name, [p for p in period_name_mapper if period_name_mapper[p] == period_name][0]
 
 def select_model(available_models=list(model_name_mapper.keys()),
                  default_model='dQ, sumQ, rpe, C*2, R*5, t',
@@ -421,16 +426,23 @@ def select_model(available_models=list(model_name_mapper.keys()),
     model = [m for m in model_name_mapper if model_name_mapper[m] == model_name][0]
     return model_name, model
 
-def select_paras(available_paras=list(para_name_mapper.keys()), 
-                default_paras=None, 
+def select_para(multi=True,
+                available_paras=list(para_name_mapper.keys()), 
+                default_paras='relative_action_value_ic', 
                 label='Variables to draw',
                 col=st):
-    para_names = col.multiselect(label, 
+    if multi:
+        para_names = col.multiselect(label, 
                                  [para_name_mapper[p] for p in available_paras],
                                  [para_name_mapper[p] for p in default_paras],
                                  )
-    paras = [p for p in para_name_mapper if para_name_mapper[p] in para_names]
-    return para_names, paras
+        return para_names, [p for p in para_name_mapper if para_name_mapper[p] in para_names]
+    else:
+        para_name = col.selectbox(label, 
+                                  [para_name_mapper[p] for p in available_paras],
+                                  available_paras.index(default_paras),
+                                  )
+        return para_name, [p for p in para_name_mapper if para_name_mapper[p] == para_name][0]
 
 
 if __name__ == '__main__':
@@ -477,13 +489,13 @@ if __name__ == '__main__':
         cols = st.columns([1, 1, 1])
         aois = cols[0].multiselect('Areas to include', st.session_state.aoi_color_mapping.keys(), st.session_state.aoi_color_mapping)
    
-        _, paras = select_paras(default_paras=[p for p in para_name_mapper if para_name_mapper[p] in 
+        _, paras = select_para(default_paras=[p for p in para_name_mapper if para_name_mapper[p] in 
                                               ['dQ', 'sumQ', 'rpe', 'choice (this)', 'choice (next)', 'trial number', 'firing 1 back']], 
                                col=cols[1])
-        _, periods = select_periods(col=cols[2])
+        _, periods = select_period(col=cols[2])
         
         if aois and paras and periods:
-            df_period_linear_fit = df_period_linear_fit_all.query('area_of_interest in @aois')
+            df_period_linear_fit = df_period_linear_fit_filtered.query('area_of_interest in @aois')
             st.markdown(f'#### N = {len(df_period_linear_fit)}')
             fig = plot_t_distribution(df_period_linear_fit=df_period_linear_fit, 
                                     periods=periods, 
@@ -512,15 +524,15 @@ if __name__ == '__main__':
         
         _, model = select_model(col=cols[0])
         
-        df_this_model = df_period_linear_fit_all.iloc[:, df_period_linear_fit_all.columns.get_level_values('multi_linear_model') == model]
+        df_this_model = df_period_linear_fit_filtered.iloc[:, df_period_linear_fit_filtered.columns.get_level_values('multi_linear_model') == model]
 
-        availabe_paras_this_model = [p for p in para_name_mapper if p in df_this_model.columns.get_level_values('var_name').unique()]
-        _, paras = select_paras(available_paras=availabe_paras_this_model, 
-                               default_paras=[p for p in availabe_paras_this_model if 'action_value' in p 
+        available_paras_this_model = [p for p in para_name_mapper if p in df_this_model.columns.get_level_values('var_name').unique()]
+        _, paras = select_para(available_paras=available_paras_this_model, 
+                               default_paras=[p for p in available_paras_this_model if 'action_value' in p 
                                               or p in ['rpe', 'choice_ic', 'choice_ic_next', 'trial_normalized', 'firing_1_back']],
                                col=cols[1])
                 
-        _, periods = select_periods(col=cols[2])
+        _, periods = select_period(col=cols[2])
 
         if paras and periods:
             fig = plot_t_distribution(df_period_linear_fit=df_this_model, 

@@ -94,6 +94,10 @@ def get_fig(key):
 def add_unit_filter():
     with st.expander("Unit filter", expanded=True):   
         st.session_state.df_unit_filtered = filter_dataframe(df=st.session_state.df['df_ephys_units'])
+        # Join with df_period_linear_fit_all here! (A huge dataframe with all things merged (flattened multi-level columns)
+        st.session_state.df_unit_filtered_merged = st.session_state.df_unit_filtered.set_index(st.session_state.unit_key_names
+                                                                                        ).join(st.session_state.df['df_period_linear_fit_all'], how='inner')
+        
     st.markdown(f"### {len(st.session_state.df_unit_filtered)} units filtered")
 
 
@@ -103,14 +107,19 @@ def init():
 
     df = load_data(['sessions', 'df_ephys_units', 'aoi', 'df_period_linear_fit_all'])
     st.session_state.df = df
+    st.session_state.unit_key_names = ['subject_id', 'session', 'insertion_number', 'unit']
+
     st.session_state.aoi_color_mapping = {area: f'rgb({",".join(col.astype(str))})' for area, col in zip(df['aoi'].index, df['aoi'].rgb)}
     # Some global variables
     st.session_state.scatter_stats_names = [keys for keys in st.session_state.df['df_ephys_units'].keys() if any([s in keys for s in 
                                                                                                                 ['dQ', 'sumQ', 'contraQ', 'ipsiQ', 'rpe', 'ccf', 'firing_rate',
                                                                                                                 'poisson']])]
-    st.session_state.ccf_stat_names = [n for n in st.session_state.scatter_stats_names if 'ccf' not in n]
-
-
+    
+    st.session_state.df['df_ephys_units']['number_units'] = 1
+    unit_qc = ['number_units', 'unit_amp', 'unit_snr', 'presence_ratio', 'amplitude_cutoff', 'isi_violation', 'avg_firing_rate',
+               'poisson_p_choice_outcome', 'poisson_p_dave']
+    st.session_state.ccf_stat_names = unit_qc
+        
 def app():
     st.markdown('## Foraging Unit Browser')
        
