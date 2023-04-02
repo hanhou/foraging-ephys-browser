@@ -34,7 +34,7 @@ plotly_font = lambda x: dict(xaxis_tickfont_size=x,
                             legend_font_size=x,
                             legend_title_font_size=x,)
 
-all_models = ['dQ, sumQ, rpe', 
+all_models =  ['dQ, sumQ, rpe', 
                'dQ, sumQ, rpe, C*2', 
                'dQ, sumQ, rpe, C*2, t', 
                'dQ, sumQ, rpe, C*2, R*1', 
@@ -43,21 +43,27 @@ all_models = ['dQ, sumQ, rpe',
                'dQ, sumQ, rpe, C*2, R*10, t',
                'contraQ, ipsiQ, rpe',
                'contraQ, ipsiQ, rpe, C*2, R*5, t']
-model_color_map = {model:color for model, color in zip(all_models, px.colors.qualitative.Plotly)}
 
-all_periods = ['before_2', 'delay', 'go_1.2', 'go_to_end', 'iti_all', 'iti_first_2', 'iti_last_2']
-period_mapping = {'before_2': 'Before GO (2s)', 'delay': 'Delay (median 60 ms)', 'go_1.2': 'After GO (1.2s)', 'go_to_end': 'GO to END', 
+model_name_mapper = {model:  ' + '.join([{'dQ': 'dQ', ' sumQ': 'sumQ', ' rpe': 'rpe', 'contraQ': 'contraQ', ' ipsiQ': 'ipsiQ',
+                                        ' C*2': 'choice', ' t': 'trial#', 
+                                        ' R*1': 'firing back 1', ' R*5': 'firing back 5', ' R*10': 'firing back 10'}[var] for var in model.split(',')])
+                    for model in all_models}
+
+model_color_mapper = {model:color for model, color in zip(all_models, px.colors.qualitative.Plotly)}
+
+period_name_mapper = {'before_2': 'Before GO (2s)', 'delay': 'Delay (median 60 ms)', 'go_1.2': 'After GO (1.2s)', 'go_to_end': 'GO to END', 
                   'iti_all': 'ITI (all, median 3.95s)', 'iti_first_2': 'ITI (first 2s)', 'iti_last_2': 'ITI (last 2s)'}
 
-para_mapping = {'relative_action_value_ic': 'dQ', 'total_action_value': 'sumQ', 
-                'contra_action_value': 'contraQ', 'ipsi_action_value': 'ipsiQ',
-                'rpe': 'rpe',
-                'choice_ic': 'choice (this)', 'choice_ic_next': 'choice (next)',
-                'trial_normalized': 'trial number', 
-                **{f'firing_{n}_back': f'firing {n} back' for n in range(1, 11)},
-                }
-all_paras = [var for var in df_period_linear_fit_all.columns.get_level_values('var_name').unique() if var !='']
-all_paras = para_mapping.keys()
+para_name_mapper = {'relative_action_value_ic': 'dQ', 
+                    'total_action_value': 'sumQ', 
+                    'contra_action_value': 'contraQ', 
+                    'ipsi_action_value': 'ipsiQ',
+                    'rpe': 'rpe',
+                    'choice_ic': 'choice (this)', 
+                    'choice_ic_next': 'choice (next)',
+                    'trial_normalized': 'trial number', 
+                    **{f'firing_{n}_back': f'firing {n} back' for n in range(1, 11)},
+                    }
 
 # Prepare p and t mapping
 t_value = np.linspace(0, 5, 500)
@@ -96,19 +102,25 @@ def plot_model_comparison():
                                                             ].stack(level=[0, 1]
                                                                     ).droplevel(axis=1, level=1
                                                                                 ).reset_index()
-    fig = px.box(df_period_linear_fit_melt.query('multi_linear_model in @all_models'), x='period', y='rel_bic', 
-                 color='multi_linear_model', category_orders={"multi_linear_model": all_models}, color_discrete_map=model_color_map)
+    fig = px.box(df_period_linear_fit_melt.query('multi_linear_model in @all_models'
+                                                 ).replace(model_name_mapper),
+                 x='period', y='rel_bic', 
+                 color='multi_linear_model', 
+                 color_discrete_sequence=list(model_color_mapper.values()),
+                 category_orders={"multi_linear_model": model_name_mapper.values()}, 
+                 )
+    
     return fig
 
 @st.cache_data(max_entries=100)
 def plot_t_distribution(df_period_linear_fit, periods, paras, to_compare='models'):
 
     fig = make_subplots(rows=len(paras), cols=len(periods), 
-                        subplot_titles=[period_mapping[period] for period in periods],
+                        subplot_titles=[period_name_mapper[period] for period in periods],
                         shared_yaxes=True,
                         shared_xaxes=True,
                         vertical_spacing=0.02,
-                        x_title='abs(t)',
+                        x_title='Threshold for abs(t)',
                         )
 
     for row, para in enumerate(paras):
@@ -135,9 +147,9 @@ def plot_t_distribution(df_period_linear_fit, periods, paras, to_compare='models
                     fig.add_trace(go.Scattergl(x=(x[:-1] + x[1:])/2, 
                                             y=sign_ratio,
                                             mode='lines',
-                                            line=dict(color=model_color_map[model],
-                                                    width=5 if model in model_highlight else 3),
-                                            name=model,
+                                            line=dict(color=model_color_mapper[model],
+                                                      width=5 if model in model_highlight else 3),
+                                            name=model_name_mapper[model],
                                             legendgroup=model,
                                             showlegend=col==0 and row ==0,
                                             hovertemplate=
@@ -181,14 +193,14 @@ def plot_t_distribution(df_period_linear_fit, periods, paras, to_compare='models
                         row=row+1, col=col+1)
 
     for row, para in enumerate(paras):
-        fig['layout'][f'yaxis{1 + row * len(periods)}']['title'] = para_mapping[para]
+        fig['layout'][f'yaxis{1 + row * len(periods)}']['title'] = para_name_mapper[para]
 
     # fig.update_traces(line_width=3)
     fig.update_xaxes(range=[0, 5])
     fig.update_yaxes(range=[0, 1])
-    fig.update_layout(width=min(1600, 2000/6 *len(periods)), height=200 + 200 * len(paras),
-                    font_size=17, hovermode='closest',
-                    )
+    fig.update_layout(width=min(2000, 400 + 270 * len(periods)), height=200 + 200 * len(paras),
+                     font_size=17, hovermode='closest',
+                     )
     fig.update_annotations(font_size=20)
         
     return fig
@@ -204,7 +216,7 @@ def _to_theta_r(x, y):
 def plot_unit_sig_prop_bar(aois, period, t_sign_level):
     p_value = type_1_error[np.searchsorted(t_value, t_sign_level)]
     
-    model_groups = {('dQ, sumQ, rpe', 'contraQ, ipsiQ, rpe'): ['naive model',   # Name
+    model_groups = {('dQ, sumQ, rpe', 'contraQ, ipsiQ, rpe'): ['simple model',   # Name
                                                                [p for p in sig_prop_vars if 'action_value' in p or p in ['rpe']], # Para to include
                                                                dict(pattern_shape='/', pattern_fillmode="replace") # Setting
                                                                ],
@@ -233,16 +245,16 @@ def plot_unit_sig_prop_bar(aois, period, t_sign_level):
             ns =  [x[2] for x in prop_ci.values[:, 0]] 
 
             fig.add_trace(go.Bar( 
-                                name=f'{para_mapping[para]} ({model_group_setting[0]})',
+                                name=f'{para_name_mapper[para]} ({model_group_setting[0]})',
                                 x=filtered_aoi,
                                 y=prop,
                                 error_y=dict(type='data', array=err, thickness=1),
-                                hovertemplate='%%{x}, %s, %s' % (para_mapping[para], period) + 
+                                hovertemplate='%%{x}, %s, %s' % (para_name_mapper[para], period) + 
                                             '<br>%{y:.1f} ± %{customdata[0]:.1f} % (95% CI)' + 
                                             '<br>n = %{customdata[1]} <extra></extra>',
                                 customdata=np.stack((err, ns), axis=-1),
                                 marker=dict(
-                                            color='white' if model_group_setting[0] == 'naive model' else color,
+                                            color='white' if model_group_setting[0] == 'simple model' else color,
                                             line_color=color,
                                             line_width=1,
                                             **model_group_setting[2],
@@ -280,7 +292,7 @@ def _pure_proportion(x):
 def plot_unit_pure_sig_prop_bar(aois, period, t_sign_level, model='dQ, sumQ, rpe'):
     p_value = type_1_error[np.searchsorted(t_value, t_sign_level)]    
 
-    model_groups = {(model): ['naive model',   # Name
+    model_groups = {(model): ['simple model',   # Name
                                 polar_classifiers[model][1].keys(), # Para to include
                                 dict(pattern_shape='/', pattern_fillmode="replace") # Setting
                                 ],
@@ -320,7 +332,7 @@ def plot_unit_pure_sig_prop_bar(aois, period, t_sign_level, model='dQ, sumQ, rpe
                                 y=prop,
                                 error_y=dict(type='data', array=err),
                                 marker=dict(
-                                            color='white' if model_group_setting[0] == 'naive model' else color,
+                                            color='white' if model_group_setting[0] == 'simple model' else color,
                                             line_color=color,
                                             line_width=1,
                                             **model_group_setting[2],
@@ -357,7 +369,7 @@ def plot_unit_pure_sig_prop_bar(aois, period, t_sign_level, model='dQ, sumQ, rpe
 def plot_unit_class_scatter(period, model='dQ, sumQ, rpe'):
 
     x_name, y_name = polar_classifiers[model][0].values()
-    models = {(model): 'naive model', (model+', C*2, R*5, t'): 'full model'}  
+    models = {(model): 'simple model', (model+', C*2, R*5, t'): 'full model'}  
 
     # fig = make_subplots(rows=1, cols=2, column_titles=list(model_groups.keys()))
     
@@ -384,8 +396,8 @@ def plot_unit_class_scatter(period, model='dQ, sumQ, rpe'):
                         xaxis_range=[-20, 20], yaxis_range=[-20, 20],
                         hovermode='closest',
                         legend=dict(yanchor="bottom", y=0, xanchor="right", x=1, orientation="v", font_size=15),
-                        title=f'{descr} ({model})',
-                        title_font_size=20,
+                        title=f'{descr} ({model_name_mapper[model]})',
+                        title_font_size=15,
                         )
         fig.update_xaxes(scaleanchor = "y", scaleratio = 1)
         figs.append(fig)
@@ -422,7 +434,7 @@ if __name__ == '__main__':
     elif chosen_id == 'tab2':
 
         # --- t-distribution, compare models ---
-        st.markdown('#### :red[Distribution of t-values, compare models]')
+        st.markdown('#### :red[Proportion of significant units V.S. t-value threshold (compare models)]')
 
         st.markdown(
         """
@@ -437,19 +449,20 @@ if __name__ == '__main__':
         cols = st.columns([1, 1, 1])
         aois = cols[0].multiselect('Areas to include', st.session_state.aoi_color_mapping.keys(), st.session_state.aoi_color_mapping)
         paras = cols[1].multiselect('Variables to draw', 
-                                    [para_mapping[p] for p in all_paras], 
-                                    [para_mapping[p] for p in ['relative_action_value_ic', 'total_action_value', 'rpe',
-                                                            'choice_ic', 'choice_ic_next', 'trial_normalized', 'firing_1_back']])
+                                    para_name_mapper.values(), 
+                                    ['dQ', 'sumQ', 'rpe', 'choice (this)', 'choice (next)', 'trial number', 'firing 1 back']
+        )
+   
         periods = cols[2].multiselect('Periods to draw', 
-                                    [period_mapping[p] for p in all_periods],
-                                    [period_mapping[p] for p in all_periods if p!= 'delay'])
+                                    period_name_mapper.values(),
+                                    [period_name_mapper[p] for p in period_name_mapper if p!= 'delay'])
 
         if aois and paras and periods:
             df_period_linear_fit = df_period_linear_fit_all.query('area_of_interest in @aois')
             st.markdown(f'#### N = {len(df_period_linear_fit)}')
             fig = plot_t_distribution(df_period_linear_fit=df_period_linear_fit, 
-                                    periods=[p for p in all_periods if period_mapping[p] in periods], 
-                                    paras=[p for p in all_paras if para_mapping[p] in paras],
+                                    periods=[p for p in period_name_mapper if period_name_mapper[p] in periods], 
+                                    paras=[p for p in para_name_mapper if para_name_mapper[p] in paras],
                                     to_compare='models',
                                     )
 
@@ -458,7 +471,7 @@ if __name__ == '__main__':
     elif chosen_id == 'tab3':
         
         # --- t-distribution, compare areas ---
-        st.markdown('#### :red[Distribution of t-values, compare areas]')
+        st.markdown('#### :red[Proportion of significant units V.S. t-value threshold (compare areas)]')
 
         st.markdown(
         """
@@ -471,33 +484,37 @@ if __name__ == '__main__':
         )
 
         cols = st.columns([1, 1, 1])
-        model = cols[0].selectbox('Model to plot', all_models, all_models.index('dQ, sumQ, rpe, C*2, R*5, t'))
+        model_name = cols[0].selectbox('Model to plot', 
+                                        model_name_mapper.values(), 
+                                        list(model_name_mapper.keys()).index('dQ, sumQ, rpe, C*2, R*5, t'))
+        model = [m for m in model_name_mapper if model_name_mapper[m] == model_name][0]
         df_this_model = df_period_linear_fit_all.iloc[:, df_period_linear_fit_all.columns.get_level_values('multi_linear_model') == model]
 
-        availabe_paras_this_model = [p for p in all_paras if p in df_this_model.columns.get_level_values('var_name').unique()]
+        availabe_paras_this_model = [p for p in para_name_mapper if p in df_this_model.columns.get_level_values('var_name').unique()]
         paras = cols[1].multiselect('Variables to draw', 
-                                    [para_mapping[p] for p in availabe_paras_this_model], 
-                                    [para_mapping[p] for p in availabe_paras_this_model 
+                                    [para_name_mapper[p] for p in availabe_paras_this_model], 
+                                    [para_name_mapper[p] for p in availabe_paras_this_model 
                                     if 'action_value' in p 
                                     or p in ['rpe', 'choice_ic', 'choice_ic_next', 'trial_normalized', 'firing_1_back']])
         
         periods = cols[2].multiselect('Periods to draw', 
-                                    [period_mapping[p] for p in all_periods],
-                                    [period_mapping[p] for p in all_periods if p!= 'delay'])
-
+                                      period_name_mapper.values(),
+                                      [period_name_mapper[p] for p in period_name_mapper if p!= 'delay'])
         if paras and periods:
             fig = plot_t_distribution(df_period_linear_fit=df_this_model, 
                                     to_compare='areas',
-                                    periods=[p for p in all_periods if period_mapping[p] in periods], 
-                                    paras=[p for p in all_paras if para_mapping[p] in paras])
+                                    periods=[p for p in period_name_mapper if period_name_mapper[p] in periods], 
+                                    paras=[p for p in para_name_mapper if para_name_mapper[p] in paras])
 
             plotly_events(fig, override_height=fig.layout.height*1.1, override_width=fig.layout.width, click_event=False)
 
     elif chosen_id == 'tab4':
         cols = st.columns([1, 2, 1])
-        period = cols[0].selectbox('period', [period_mapping[p] for p in all_periods], 
-                                [period_mapping[p] for p in all_periods].index(period_mapping['iti_all']))
-        _period = [p for p in all_periods if period_mapping[p] == period][0]
+        period = cols[0].selectbox('period', 
+                                   period_name_mapper.values(), 
+                                   list(period_name_mapper.keys()).index('iti_all'))
+        
+        _period = [p for p in period_name_mapper if period_name_mapper[p] == period][0]
         t_sign_level = cols[0].slider('t value threshold', 1.0, 5.0, 2.57)
         aois = cols[1].multiselect('Areas to include', st.session_state.aoi_color_mapping.keys(), st.session_state.aoi_color_mapping)
         
@@ -509,7 +526,8 @@ if __name__ == '__main__':
         st.plotly_chart(fig, use_container_width=True) # Only plotly_chart keeps the bar plot pattern
         
         # -- bar plot of pure units --
-        model = st.columns([1, 5])[0].selectbox('Model for polar classification', ['dQ, sumQ, rpe', 'contraQ, ipsiQ, rpe'], 0)
+        model_name = st.columns([1, 5])[0].selectbox('Model for polar classification', ['dQ + sumQ + ...', 'contraQ + ipsiQ + ...'], 0)
+        model = {'dQ + sumQ + ...': 'dQ, sumQ, rpe', 'contraQ + ipsiQ + ...': 'contraQ, ipsiQ, rpe'}[model_name]
         fig = plot_unit_pure_sig_prop_bar(period=_period,
                                           aois=aois,
                                           t_sign_level=t_sign_level,
