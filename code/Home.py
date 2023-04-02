@@ -128,6 +128,9 @@ def compute_pure_polar_classification(t_sign_level=1.96):
                 if_pure_this = if_pure_this & (np.sqrt(x ** 2 + y ** 2) >= t_sign_level)
                 df[period, model, f'{unit_class}', ''] = if_pure_this.astype(int)
 
+def _on_change_t_sign_level():
+    compute_pure_polar_classification(t_sign_level=st.session_state.t_sign_level)
+    
 
 def init():
     st.set_page_config(layout="wide", page_title='Foraging unit navigator')

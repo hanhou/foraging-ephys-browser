@@ -9,7 +9,7 @@ import streamlit as st
 from streamlit_plotly_events import plotly_events
 from streamlit_util import *
 
-from Home import add_unit_filter, init, compute_pure_polar_classification, pure_unit_color_mapping
+from Home import add_unit_filter, init, _on_change_t_sign_level, pure_unit_color_mapping
 
 import importlib
 uplf = importlib.import_module('.1_Unit_period_linear_fits', package='pages')
@@ -398,9 +398,6 @@ def _ccf_heatmap_get_aggr_func_and_range(heatmap_aggr_name, column_to_map, value
     return heatmap_aggr_func_mapping[heatmap_aggr_name][0], heatmap_aggr_func_mapping[heatmap_aggr_name][1]
 
 
-def on_change_t_sign_level():
-    compute_pure_polar_classification(t_sign_level=st.session_state.t_sign_level)
-
 with st.sidebar:    
     add_unit_filter()
 
@@ -490,7 +487,7 @@ with st.sidebar:
                 if 'sign' in heatmap_aggr_name or if_map_pure: 
                     sign_level = st.number_input("significant level: t >= ", value=1.96, min_value=0.0, step=0.1,
                                                  key='t_sign_level',
-                                                 on_change=on_change_t_sign_level)   # Update pure polar classification
+                                                 on_change=_on_change_t_sign_level)   # Update pure polar classification
 
                 if_bi_directional_heatmap = (any(values_to_map < 0) + any(values_to_map > 0)) == 2 and r'%' not in heatmap_aggr_name 
                 heatmap_aggr_func, heatmap_color_ranges = _ccf_heatmap_get_aggr_func_and_range(heatmap_aggr_name, column_to_map, values_to_map)
@@ -533,7 +530,7 @@ with container_coronal:
 
     selected_points_slice = plotly_events(fig, click_event=False, hover_event=False, select_event=False,
                                           override_height=1500)
-    st.write(selected_points_slice)
+    # st.write(selected_points_slice)
     # st.plotly_chart(fig, use_container_width=True)
 
 with container_saggital:

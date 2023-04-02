@@ -10,7 +10,7 @@ from plotly.subplots import make_subplots
 from streamlit_plotly_events import plotly_events
 import extra_streamlit_components as stx
 
-from Home import add_unit_filter, init, _to_theta_r, pure_unit_color_mapping, polar_classifiers
+from Home import add_unit_filter, init, _to_theta_r, _on_change_t_sign_level, pure_unit_color_mapping, polar_classifiers
 
 if 'df' not in st.session_state: 
     init()
@@ -181,7 +181,8 @@ def plot_t_distribution(df_period_linear_fit, periods, paras, to_compare='models
     # fig.update_traces(line_width=3)
     fig.update_xaxes(range=[0, 5])
     fig.update_yaxes(range=[0, 1])
-    fig.update_layout(width=min(2000, 400 + 270 * len(periods)), height=200 + 200 * len(paras),
+    fig.update_layout(width=min(2000, 400 + 270 * len(periods)), 
+                      height=200 + 240 * len(paras),
                      font_size=17, hovermode='closest',
                      )
     fig.update_annotations(font_size=20)
@@ -286,17 +287,8 @@ def plot_unit_pure_sig_prop_bar(aois, period, t_sign_level, model='dQ, sumQ, rpe
     
     for model_group, model_group_setting in model_groups.items():
         
-        # Compute the proportions of pure neurons from dQ / sumQ 
-        x = df_period_linear_fit_filtered.loc[:, (period, model_group, 't', polar_classifiers[model][0]['x_name'])].values
-        y = df_period_linear_fit_filtered.loc[:, (period, model_group, 't', polar_classifiers[model][0]['y_name'])].values
-        theta, _ = _to_theta_r(x, y)
-
         for unit_class, ranges in polar_classifiers[model][1].items():
-            color = pure_unit_color_mapping[unit_class]
-            if_pure_this = np.any([(a_min < theta) & (theta < a_max) for a_min, a_max in ranges], axis=0) 
-            if_pure_this = if_pure_this & (np.sqrt(x ** 2 + y ** 2) >= t_sign_level)
-            df_period_linear_fit_filtered[period, model_group, f'{unit_class}', ''] = if_pure_this
-          
+            color = pure_unit_color_mapping[unit_class]         
             prop_ci = df_period_linear_fit_filtered[period, model_group, f'{unit_class}', ''].groupby('area_of_interest').apply(_pure_proportion)  
                         
             # filtered_aoi = [aoi for aoi in st.session_state.df['aoi'].index if aoi in prop_ci.index and aoi in aois] # Sort according to st.session_state.df['aoi'].index
@@ -359,7 +351,7 @@ def plot_unit_class_scatter(period, model='dQ, sumQ, rpe'):
     for i, (model, descr) in enumerate(models.items()):
         fig = go.Figure()
         for unit_class, color in pure_unit_color_mapping.items():
-            this = df_period_linear_fit_filtered[period, (model), f'{unit_class}', '']
+            this = df_period_linear_fit_filtered[period, (model), f'{unit_class}', ''].astype(bool)
                 
             fig.add_trace(go.Scattergl(x=df_period_linear_fit_filtered[period, (model), 't', x_name][this], 
                                        y=df_period_linear_fit_filtered[period, (model), 't', y_name][this], 
@@ -429,7 +421,7 @@ def select_para(multi=True,
 if __name__ == '__main__':
 
     # --- Model comparison ---
-    st.markdown('### Select tab here 👇')
+    st.markdown('### Select a tab here 👇')
     chosen_id = stx.tab_bar(data=[
                                 stx.TabBarItemData(id="tab1", title="1. Model comparison", description=""),
                                 stx.TabBarItemData(id="tab2", title="2. Distribution of t-values, compare models", description=""),
@@ -530,28 +522,33 @@ if __name__ == '__main__':
                                    list(period_name_mapper.keys()).index('iti_all'))
         
         _period = [p for p in period_name_mapper if period_name_mapper[p] == period][0]
-        t_sign_level = cols[0].slider('t value threshold', 1.0, 5.0, 1.96)
+        t_sign_level = cols[0].slider('t value threshold', 1.0, 5.0, 1.96,
+                                      key='t_sign_level',
+                                      on_change=_on_change_t_sign_level)
         aois = cols[1].multiselect('Areas to include', st.session_state.aoi_color_mapping.keys(), st.session_state.aoi_color_mapping)
         
         # -- bar plot of significant units --
-        fig = plot_unit_sig_prop_bar(period=_period,
-                                     aois=aois,
-                                     t_sign_level=t_sign_level)
-        
-        st.plotly_chart(fig, use_container_width=True) # Only plotly_chart keeps the bar plot pattern
+        with st.expander('Bar plot of significant units', expanded=True):
+            fig = plot_unit_sig_prop_bar(period=_period,
+                                        aois=aois,
+                                        t_sign_level=t_sign_level)
+            
+            st.plotly_chart(fig, use_container_width=True) # Only plotly_chart keeps the bar plot pattern
         
         # -- bar plot of pure units --
-        model_name = st.columns([1, 5])[0].selectbox('Model for polar classification', ['dQ + sumQ + ...', 'contraQ + ipsiQ + ...'], 0)
-        model = {'dQ + sumQ + ...': 'dQ, sumQ, rpe', 'contraQ + ipsiQ + ...': 'contraQ, ipsiQ, rpe'}[model_name]
-        fig = plot_unit_pure_sig_prop_bar(period=_period,
-                                          aois=aois,
-                                          t_sign_level=t_sign_level,
-                                          model=model)        
-        st.plotly_chart(fig, use_container_width=True) # Only plotly_chart keeps the bar plot pattern
+        with st.expander('Bar plot of pure units', expanded=True):
+            model_name = st.columns([1, 5])[0].selectbox('Model for polar classification', ['dQ + sumQ + ...', 'contraQ + ipsiQ + ...'], 0)
+            model = {'dQ + sumQ + ...': 'dQ, sumQ, rpe', 'contraQ + ipsiQ + ...': 'contraQ, ipsiQ, rpe'}[model_name]
+            fig = plot_unit_pure_sig_prop_bar(period=_period,
+                                            aois=aois,
+                                            t_sign_level=t_sign_level,
+                                            model=model)        
+            st.plotly_chart(fig, use_container_width=True) # Only plotly_chart keeps the bar plot pattern
 
         # -- illustrate polar classfier --
-        cols = st.columns([1, 1, 1])
-        figs = plot_unit_class_scatter(period=_period, model=model)
-        for i, fig in enumerate(figs):
-            with cols[i]:
-                plotly_events(fig, override_height=fig.layout.height*1.1, override_width=fig.layout.width, click_event=False)
+        with st.expander('Polar classifier', expanded=True):
+            cols = st.columns([1, 1, 1])
+            figs = plot_unit_class_scatter(period=_period, model=model)
+            for i, fig in enumerate(figs):
+                with cols[i]:
+                    plotly_events(fig, override_height=fig.layout.height*1.1, override_width=fig.layout.width, click_event=False)
