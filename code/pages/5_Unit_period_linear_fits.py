@@ -59,20 +59,35 @@ para_mapping = {'relative_action_value_ic': 'dQ', 'total_action_value': 'sumQ',
 all_paras = [var for var in df_period_linear_fit_all.columns.get_level_values('var_name').unique() if var !='']
 all_paras = para_mapping.keys()
 
+# Prepare p and t mapping
 t_value = np.linspace(0, 5, 500)
 type_1_error = 2 * norm.sf(t_value)
 
-pure_unit_color_mapping =  {'pure_dQ': 'darkviolet',
-                            'pure_sumQ': 'deepskyblue',
-                            'pure_contraQ': 'darkblue',
-                            'pure_ipsiQ': 'darkorange'}
-                                
+# For significant proportion
 sig_prop_vars = ['relative_action_value_ic', 'total_action_value', 
                 'contra_action_value', 'ipsi_action_value',
                 'rpe',
                 'choice_ic', 'choice_ic_next', 'trial_normalized', 'firing_1_back']
 sig_prop_color_mapping = {var: color for var, color in zip(sig_prop_vars, 
                                                            ['darkviolet', 'deepskyblue', 'darkblue', 'darkorange', 'gray'] + px.colors.qualitative.Plotly)}
+# For pure units
+pure_unit_color_mapping =  {'pure_dQ': 'darkviolet',
+                            'pure_sumQ': 'deepskyblue',
+                            'pure_contraQ': 'darkblue',
+                            'pure_ipsiQ': 'darkorange'}
+                                
+polar_classifiers = {'dQ, sumQ, rpe': [{'x_name': 'relative_action_value_ic', 'y_name': 'total_action_value'},
+                                        {'pure_dQ': [(-22.5, 22.5), (-22.5 + 180, 180), (-180, -180 + 22.5)],
+                                        'pure_sumQ': [(22.5 + 45, 67.5 + 45), (22.5 + 45 - 180, 67.5 + 45 - 180)],
+                                        'pure_contraQ': [(22.5, 67.5), (22.5 - 180, 67.5 - 180)],
+                                        'pure_ipsiQ': [(22.5 + 90, 67.5 + 90), (22.5 + 90 - 180, 67.5 + 90 - 180)]}],
+                        
+                     'contraQ, ipsiQ, rpe':  [{'x_name': 'ipsi_action_value', 'y_name': 'contra_action_value'},
+                                            {'pure_dQ': [(22.5 + 90, 67.5 + 90), (22.5 + 90 - 180, 67.5 + 90 - 180)],
+                                            'pure_sumQ': [(22.5, 67.5), (22.5 - 180, 67.5 - 180)],
+                                            'pure_contraQ': [(22.5 + 45, 67.5 + 45), (22.5 + 45 - 180, 67.5 + 45 - 180)],
+                                            'pure_ipsiQ': [(-22.5, 22.5), (-22.5 + 180, 180), (-180, -180 + 22.5)],}]
+}
 
 
 @st.cache_data(max_entries=100)
@@ -209,7 +224,9 @@ def plot_unit_sig_prop_bar(aois, period, t_sign_level):
                                                   ].groupby('area_of_interest'
                                                             ).agg(lambda x: _sig_proportion(x, t_sign_level))
             
-            filtered_aoi = [aoi for aoi in st.session_state.df['aoi'].index if aoi in prop_ci.index and aoi in aois] # Sort according to st.session_state.df['aoi'].index
+            # filtered_aoi = [aoi for aoi in st.session_state.df['aoi'].index if aoi in prop_ci.index and aoi in aois] # Sort according to st.session_state.df['aoi'].index
+            filtered_aoi = [aoi for aoi in aois if aoi in prop_ci.index and aoi in aois]
+
             prop_ci = prop_ci.reindex(filtered_aoi)
             prop = [x[0] for x in prop_ci.values[:, 0]] 
             err = [x[1] for x in prop_ci.values[:, 0]] 
@@ -260,20 +277,15 @@ def _pure_proportion(x):
     ci_95 = 1.96 * np.sqrt(prop * (1 - prop) / len(x))
     return prop * 100, ci_95 * 100, len(x)
 
-def plot_unit_pure_sig_prop_bar(aois, period, t_sign_level):
+def plot_unit_pure_sig_prop_bar(aois, period, t_sign_level, model='dQ, sumQ, rpe'):
     p_value = type_1_error[np.searchsorted(t_value, t_sign_level)]    
-    
-    unit_classifier_dQ_sumQ = {'pure_dQ': [(-22.5, 22.5), (-22.5 + 180, 180), (-180, -180 + 22.5)],
-                                'pure_sumQ': [(22.5 + 45, 67.5 + 45), (22.5 + 45 - 180, 67.5 + 45 - 180)],
-                                'pure_contraQ': [(22.5, 67.5), (22.5 - 180, 67.5 - 180)],
-                                'pure_ipsiQ': [(22.5 + 90, 67.5 + 90), (22.5 + 90 - 180, 67.5 + 90 - 180)]}
 
-    model_groups = {('dQ, sumQ, rpe'): ['naive model',   # Name
-                                        unit_classifier_dQ_sumQ.keys(), # Para to include
-                                        dict(pattern_shape='/', pattern_fillmode="replace") # Setting
-                                        ],
-                    ('dQ, sumQ, rpe, C*2, R*5, t'): ['full model',
-                                                    unit_classifier_dQ_sumQ.keys(),
+    model_groups = {(model): ['naive model',   # Name
+                                polar_classifiers[model][1].keys(), # Para to include
+                                dict(pattern_shape='/', pattern_fillmode="replace") # Setting
+                                ],
+                    (model + ', C*2, R*5, t'): ['full model',
+                                                    polar_classifiers[model][1].keys(),
                                                     dict()],
                     }   
     
@@ -282,21 +294,21 @@ def plot_unit_pure_sig_prop_bar(aois, period, t_sign_level):
     for model_group, model_group_setting in model_groups.items():
         
         # Compute the proportions of pure neurons from dQ / sumQ 
-        x = df_period_linear_fit_all.loc[:, (period, model_group, 't', 'relative_action_value_ic')].values
-        y = df_period_linear_fit_all.loc[:, (period, model_group, 't', 'total_action_value')].values
-        theta_dQ_sumQ, _ = _to_theta_r(x, y)
+        x = df_period_linear_fit_all.loc[:, (period, model_group, 't', polar_classifiers[model][0]['x_name'])].values
+        y = df_period_linear_fit_all.loc[:, (period, model_group, 't', polar_classifiers[model][0]['y_name'])].values
+        theta, _ = _to_theta_r(x, y)
 
-        for unit_class, ranges in unit_classifier_dQ_sumQ.items():
+        for unit_class, ranges in polar_classifiers[model][1].items():
             color = pure_unit_color_mapping[unit_class]
-            this = np.any([(a_min < theta_dQ_sumQ) & (theta_dQ_sumQ < a_max) for a_min, a_max in ranges], axis=0) 
+            this = np.any([(a_min < theta) & (theta < a_max) for a_min, a_max in ranges], axis=0) 
             this = this & (np.sqrt(x ** 2 + y ** 2) >= t_sign_level)
-            df_period_linear_fit_all[period, model_group, f'{unit_class}_dQ_sumQ', ''] = this
+            df_period_linear_fit_all[period, model_group, f'{unit_class}_from_{model}', ''] = this
           
-            prop_ci = df_period_linear_fit_all[period, model_group, f'{unit_class}_dQ_sumQ', ''].groupby('area_of_interest').apply(_pure_proportion)  
-            
-            linear_model = '_dQ_sumQ'
-            
-            filtered_aoi = [aoi for aoi in st.session_state.df['aoi'].index if aoi in prop_ci.index and aoi in aois] # Sort according to st.session_state.df['aoi'].index
+            prop_ci = df_period_linear_fit_all[period, model_group, f'{unit_class}_from_{model}', ''].groupby('area_of_interest').apply(_pure_proportion)  
+                        
+            # filtered_aoi = [aoi for aoi in st.session_state.df['aoi'].index if aoi in prop_ci.index and aoi in aois] # Sort according to st.session_state.df['aoi'].index
+            filtered_aoi = [aoi for aoi in aois if aoi in prop_ci.index and aoi in aois]
+
             prop_ci = prop_ci.reindex(filtered_aoi)
             prop = [x[0] for x in prop_ci]
             err = [x[1] for x in prop_ci]
@@ -319,22 +331,22 @@ def plot_unit_pure_sig_prop_bar(aois, period, t_sign_level):
                                 customdata=np.stack((err, ns), axis=-1),
                                 ))
         
-    fig.add_hline(y=p_value * 100 / 4,  # Divided by 4 types 
+    fig.add_hline(y=p_value * 100,  # Divided by 4 types 
                   line_color='black', line_dash='dash')
     fig.add_hline(y=100,  # Divided by 4 types 
                   line_color='black', line_dash='dash')
     
     fig.update_layout(barmode='group', 
-                      height=500,
+                      height=700,
                       yaxis_title='% sig. units (+/- 95% CI)',
                       font=dict(size=20),
                       hovermode='closest',
-                      title=f'Polar classification, p < {p_value:.2g}',
+                      title=f'Polar classification from ({model[:-5]}), p < {p_value:.2g}',
                       title_font_size=25,
                       yaxis_range=[0, 105],
                       **plotly_font(20),  # Have to use this because we have to use plotly_chart to keep the patterns...  
                       legend=dict(
-                                yanchor="top", y=1.2,
+                                yanchor="top", y=0.9,
                                 xanchor="right", x=1,
                                 orientation="h",
                             )
@@ -343,10 +355,10 @@ def plot_unit_pure_sig_prop_bar(aois, period, t_sign_level):
 
 
 @st.cache_data(ttl=24*3600)
-def plot_unit_class_scatter(period):
+def plot_unit_class_scatter(period, model='dQ, sumQ, rpe'):
 
-    x_name, y_name = 'relative_action_value_ic', 'total_action_value'
-    model_groups = {('dQ, sumQ, rpe'): 'naive model', ('dQ, sumQ, rpe, C*2, R*5, t'): 'full model'}  
+    x_name, y_name = polar_classifiers[model][0].values()
+    model_groups = {(model): 'naive model', (model+', C*2, R*5, t'): 'full model'}  
 
     # fig = make_subplots(rows=1, cols=2, column_titles=list(model_groups.keys()))
     
@@ -355,7 +367,7 @@ def plot_unit_class_scatter(period):
     for i, model_group in enumerate(model_groups):
         fig = go.Figure()
         for unit_class, color in pure_unit_color_mapping.items():
-            this = df_period_linear_fit_all[period, model_group, f'{unit_class}_dQ_sumQ', '']
+            this = df_period_linear_fit_all[period, model_group, f'{unit_class}_from_{model}', '']
                 
             fig.add_trace(go.Scattergl(x=df_period_linear_fit_all[period, model_group, 't', x_name][this], 
                                        y=df_period_linear_fit_all[period, model_group, 't', y_name][this], 
@@ -363,7 +375,7 @@ def plot_unit_class_scatter(period):
                                        marker=dict(symbol='circle', size=5, opacity=0.5, 
                                                 line=dict(color=color, width=1),
                                                 color=color if 'R*5' in model_group else 'white'), 
-                                       name=f'{unit_class}_dQ_sumQ'
+                                       name=f'{unit_class}'
                                       ), 
                         #   row=1, col=i+1
                           )
@@ -373,7 +385,7 @@ def plot_unit_class_scatter(period):
                         xaxis_range=[-20, 20], yaxis_range=[-20, 20],
                         hovermode='closest',
                         legend=dict(yanchor="bottom", y=0, xanchor="right", x=1, orientation="v", font_size=15),
-                        title=model_group,
+                        title=f'from {model_group}',
                         )
         fig.update_xaxes(scaleanchor = "y", scaleratio = 1)
         figs.append(fig)
@@ -497,14 +509,16 @@ if __name__ == '__main__':
         st.plotly_chart(fig, use_container_width=True) # Only plotly_chart keeps the bar plot pattern
         
         # -- bar plot of pure units --
+        model = st.columns([1, 5])[0].selectbox('Model for polar classification', ['dQ, sumQ, rpe', 'contraQ, ipsiQ, rpe'], 0)
         fig = plot_unit_pure_sig_prop_bar(period=_period,
                                           aois=aois,
-                                          t_sign_level=t_sign_level)        
+                                          t_sign_level=t_sign_level,
+                                          model=model)        
         st.plotly_chart(fig, use_container_width=True) # Only plotly_chart keeps the bar plot pattern
 
         # -- illustrate polar classfier --
         cols = st.columns([1, 1, 1])
-        figs = plot_unit_class_scatter(period=_period)
+        figs = plot_unit_class_scatter(period=_period, model=model)
         for i, fig in enumerate(figs):
             with cols[i]:
                 plotly_events(fig, override_height=fig.layout.height*1.1, override_width=fig.layout.width, click_event=False)
