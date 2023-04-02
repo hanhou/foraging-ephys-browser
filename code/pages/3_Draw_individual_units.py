@@ -7,7 +7,7 @@ from streamlit_util import filter_dataframe, aggrid_interactive_table_units
 from datetime import datetime 
 
 import importlib
-package_aoi = importlib.import_module('.2_Area_of_interest_view', package='pages')
+package_aoi = importlib.import_module('.5_Area_of_interest_view', package='pages')
 
 
 import s3fs

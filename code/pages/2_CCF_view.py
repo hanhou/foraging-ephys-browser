@@ -354,10 +354,10 @@ def _ccf_heatmap_available_aggr_funcs(value_to_map):
 
 def _ccf_heatmap_get_aggr_func(heatmap_aggr_name, value_to_map):
     heatmap_aggr_func_mapping = {    # func, (min, max, step, default)
-        'median': ('median', (0.0, 15.0, 1.0, 5.0 if if_bi_directional_heatmap else (2.0, 5.0))),  
-        'median (significant only)': (lambda x: np.median(x[np.abs(x) >= sign_level]), (0.0, 15.0, 1.0, 5.0 if if_bi_directional_heatmap else (2.0, 5.0))),  
-        'mean': ('mean', (0.0, 15.0, 1.0, 5.0 if if_bi_directional_heatmap else (2.0, 5.0))),
-        'mean (significant only)': (lambda x: np.mean(x[np.abs(x) >= sign_level]), (0.0, 15.0, 1.0, 5.0 if if_bi_directional_heatmap else (2.0, 5.0))),
+        'median': ('median', (0.0, 15.0, 0.1, 5.0 if if_bi_directional_heatmap else (2.0, 5.0))),  
+        'median (significant only)': (lambda x: np.median(x[np.abs(x) >= sign_level]), (0.0, 15.0, 0.1, 5.0 if if_bi_directional_heatmap else (2.0, 5.0))),  
+        'mean': ('mean', (0.0, 15.0, 0.1, 5.0 if if_bi_directional_heatmap else (2.0, 5.0))),
+        'mean (significant only)': (lambda x: np.mean(x[np.abs(x) >= sign_level]), (0.0, 15.0, 0.1, 5.0 if if_bi_directional_heatmap else (2.0, 5.0))),
         r'% significant units': (lambda x: sum(np.abs(x) >= sign_level) / len(x) * 100, (5, 100, 5, (30, 80))),
         'number of units': (lambda x: len(x) if len(x) else np.nan, (0, 50, 5, (0, 20))),
         r'% pure units': (lambda x: sum(x) / len(x) * 100, (0, 100, 1, (5, 80))),
@@ -374,7 +374,10 @@ with st.sidebar:
     with st.expander("CCF view settings", expanded=True):
         
         if_flip = st.checkbox("Flip to left hemisphere", value=True)
-        value_to_map = st.selectbox("Plot which?", st.session_state.ccf_stat_names, index=st.session_state.ccf_stat_names.index('t_dQ_iti'))
+        value_to_map = st.selectbox("Plot which?", 
+                                    st.session_state.ccf_stat_names, 
+                                    index=st.session_state.ccf_stat_names.index('t_dQ_iti'))
+        
         if_take_abs = st.checkbox("Use abs()?", value=False)
         
         if_ccf_plot_scatter = st.checkbox("Draw units", value=True)        
