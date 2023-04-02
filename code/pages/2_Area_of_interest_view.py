@@ -64,59 +64,6 @@ def plot_scatter(data, x_name='dQ_iti', y_name='sumQ_iti', if_use_ccf_color=Fals
     return fig
 
 
-@st.cache_data(ttl=24*3600)
-def plot_unit_class_scatter(x_name, y_name):
-
-    fig = go.Figure()
-    
-    for unit_class, color in pure_unit_color_mapping.items():
-        this = st.session_state.df_unit_filtered[f'{unit_class}_dQ_sumQ']
-        fig.add_trace(go.Scatter(x=st.session_state.df_unit_filtered[x_name][this], 
-                                    y=st.session_state.df_unit_filtered[y_name][this], 
-                                    mode='markers',
-                                    marker_color=color, 
-                                    name=f'{unit_class}_dQ_sumQ'
-                                ))
-        
-    fig.add_trace(go.Scatter(x=st.session_state.df_unit_filtered.query('p_model_iti >= 0.01')[x_name], 
-                                y=st.session_state.df_unit_filtered.query('p_model_iti >= 0.01')[y_name], 
-                            mode='markers',
-                            marker_color='black', 
-                            name='non_sig'
-                    ))
-    fig.update_layout(width=500, height=500, font=dict(size=20))
-    fig.update_yaxes(scaleanchor = "x", scaleratio = 1)
-            
-    return fig
-
-@st.cache_data(ttl=24*3600)
-def plot_unit_pure_class_bar():
-    linear_model = '_dQ_sumQ'
-    fig = go.Figure()
-    for pure_class, color in pure_unit_color_mapping.items():
-        data = st.session_state.df['aoi'][pure_class + linear_model].values
-        prop = [x[0] for x in data]
-        err = [x[1] for x in data]
-        fig.add_trace(go.Bar(
-                            name=pure_class,
-                            x=st.session_state.df['aoi'].index, 
-                            y=prop,
-                            error_y=dict(type='data', array=err),
-                            marker=dict(color=color),
-                            hovertemplate='%%{x}, %s' % (pure_class) + 
-                                          '<br>%{y:.1f} ± %{customdata[0]:.1f} % (95% CI)' + 
-                                          '<br>n = %{customdata[1]} <extra></extra>',
-                            customdata=np.stack((err, st.session_state.df['aoi'].number_of_units), axis=-1),
-                            ))
-    
-    fig.add_hline(y=0.01 * 100 / 4, line_width=1, line_dash="dash", line_color="black", name='Type I error')  # Type I error (I used p < 0.01 when classify units) devided by 4 types
-    fig.update_layout(barmode='group', 
-                      height=800,
-                      yaxis_title='% pure units (+/- 95% CI)',
-                      font=dict(size=20)
-                      )    
-    return fig
-
 
 @st.cache_data(ttl=24*3600)
 def _polar_histogram(df_this_aoi, x_name, y_name, polar_method, bins, sign_level):
@@ -273,14 +220,6 @@ def app():
         pass
     
                 
-    # -- bar plot unit pure classifier --
-    st.markdown(f'### Proportion of "pure" neurons (p_model < 0.01; polar classification), errorbar = binomial 95% CI')
-    fig = plot_unit_pure_class_bar()
-    st.plotly_chart(fig, use_container_width=True)
-    
-    with st.columns((1, 2))[0]:
-        fig = plot_unit_class_scatter(x_name, y_name)
-        st.plotly_chart(fig, use_container_width=True)
 
     container_unit_all_in_one = st.container()
     
