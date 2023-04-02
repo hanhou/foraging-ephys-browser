@@ -76,20 +76,7 @@ def get_fig_unit_all_in_one(key):
             img = img.crop((500, 140, 5400, 3000))
             
     return img
-
-# table_mapping = {
-#     'sessions': fetch_sessions,
-#     'df_ephys_units': fetch_df_ephys_units,
-# }
-
-
-@st.cache_data(ttl=24*3600)
-def get_fig(key):
-    fig = plt.figure(figsize=(8, 3), constrained_layout=True)
-    ax = fig.subplots(1,1)
-    
-    foraging_model_plot.plot_session_fitted_choice(key, ax=ax, remove_ignored=False, first_n=2)
-    return fig   
+ 
 
 def add_unit_filter():
     with st.expander("Unit filter", expanded=True):   
@@ -101,7 +88,47 @@ def add_unit_filter():
     st.markdown(f"### {len(st.session_state.df_unit_filtered)} units filtered")
 
 
-# ------- Layout starts here -------- #    
+# For pure units
+pure_unit_color_mapping =  {'pure_dQ': 'darkviolet',
+                            'pure_sumQ': 'deepskyblue',
+                            'pure_contraQ': 'darkblue',
+                            'pure_ipsiQ': 'darkorange'}
+                                
+polar_classifiers = {'dQ, sumQ, rpe': [{'x_name': 'relative_action_value_ic', 'y_name': 'total_action_value'},
+                                        {'pure_dQ': [(-22.5, 22.5), (-22.5 + 180, 180), (-180, -180 + 22.5)],
+                                        'pure_sumQ': [(22.5 + 45, 67.5 + 45), (22.5 + 45 - 180, 67.5 + 45 - 180)],
+                                        'pure_contraQ': [(22.5, 67.5), (22.5 - 180, 67.5 - 180)],
+                                        'pure_ipsiQ': [(22.5 + 90, 67.5 + 90), (22.5 + 90 - 180, 67.5 + 90 - 180)]}],
+                        
+                     'contraQ, ipsiQ, rpe':  [{'x_name': 'ipsi_action_value', 'y_name': 'contra_action_value'},
+                                            {'pure_dQ': [(22.5 + 90, 67.5 + 90), (22.5 + 90 - 180, 67.5 + 90 - 180)],
+                                            'pure_sumQ': [(22.5, 67.5), (22.5 - 180, 67.5 - 180)],
+                                            'pure_contraQ': [(22.5 + 45, 67.5 + 45), (22.5 + 45 - 180, 67.5 + 45 - 180)],
+                                            'pure_ipsiQ': [(-22.5, 22.5), (-22.5 + 180, 180), (-180, -180 + 22.5)],}]
+}
+
+def _to_theta_r(x, y):
+    return np.rad2deg(np.arctan2(y, x)), np.sqrt(x**2 + y**2)
+
+def compute_pure_polar_classification(t_sign_level=1.96):
+    # Add or update pure polar classification in st.session_state.df['df_period_linear_fit_all']
+    df = st.session_state.df['df_period_linear_fit_all']  # assign pointer
+    
+    for period in df.columns.get_level_values('period').unique():
+        for model in df.columns.get_level_values('multi_linear_model').unique():
+            classfier_key = [k for k in polar_classifiers if k in model][0]
+            
+            # Compute the proportions of pure neurons from dQ / sumQ 
+            x = df.loc[:, (period, model, 't', polar_classifiers[classfier_key][0]['x_name'])].values
+            y = df.loc[:, (period, model, 't', polar_classifiers[classfier_key][0]['y_name'])].values
+            theta, _ = _to_theta_r(x, y)
+
+            for unit_class, ranges in polar_classifiers[classfier_key][1].items():
+                if_pure_this = np.any([(a_min < theta) & (theta < a_max) for a_min, a_max in ranges], axis=0) 
+                if_pure_this = if_pure_this & (np.sqrt(x ** 2 + y ** 2) >= t_sign_level)
+                df[period, model, f'{unit_class}', ''] = if_pure_this.astype(int)
+
+
 def init():
     st.set_page_config(layout="wide", page_title='Foraging unit navigator')
 
@@ -119,7 +146,13 @@ def init():
     unit_qc = ['number_units', 'unit_amp', 'unit_snr', 'presence_ratio', 'amplitude_cutoff', 'isi_violation', 'avg_firing_rate',
                'poisson_p_choice_outcome', 'poisson_p_dave']
     st.session_state.ccf_stat_names = unit_qc
+    
+    # Add pure polar classification
+    compute_pure_polar_classification()
+    
         
+# ------- Layout starts here -------- #    
+
 def app():
     st.markdown('## Foraging Unit Browser')
        

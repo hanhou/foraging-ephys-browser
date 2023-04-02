@@ -10,7 +10,7 @@ from plotly.subplots import make_subplots
 from streamlit_plotly_events import plotly_events
 import extra_streamlit_components as stx
 
-from Home import add_unit_filter, init
+from Home import add_unit_filter, init, _to_theta_r, pure_unit_color_mapping, polar_classifiers
 
 if 'df' not in st.session_state: 
     init()
@@ -76,24 +76,7 @@ sig_prop_vars = ['relative_action_value_ic', 'total_action_value',
                 'choice_ic', 'choice_ic_next', 'trial_normalized', 'firing_1_back']
 sig_prop_color_mapping = {var: color for var, color in zip(sig_prop_vars, 
                                                            ['darkviolet', 'deepskyblue', 'darkblue', 'darkorange', 'gray'] + px.colors.qualitative.Plotly)}
-# For pure units
-pure_unit_color_mapping =  {'pure_dQ': 'darkviolet',
-                            'pure_sumQ': 'deepskyblue',
-                            'pure_contraQ': 'darkblue',
-                            'pure_ipsiQ': 'darkorange'}
-                                
-polar_classifiers = {'dQ, sumQ, rpe': [{'x_name': 'relative_action_value_ic', 'y_name': 'total_action_value'},
-                                        {'pure_dQ': [(-22.5, 22.5), (-22.5 + 180, 180), (-180, -180 + 22.5)],
-                                        'pure_sumQ': [(22.5 + 45, 67.5 + 45), (22.5 + 45 - 180, 67.5 + 45 - 180)],
-                                        'pure_contraQ': [(22.5, 67.5), (22.5 - 180, 67.5 - 180)],
-                                        'pure_ipsiQ': [(22.5 + 90, 67.5 + 90), (22.5 + 90 - 180, 67.5 + 90 - 180)]}],
-                        
-                     'contraQ, ipsiQ, rpe':  [{'x_name': 'ipsi_action_value', 'y_name': 'contra_action_value'},
-                                            {'pure_dQ': [(22.5 + 90, 67.5 + 90), (22.5 + 90 - 180, 67.5 + 90 - 180)],
-                                            'pure_sumQ': [(22.5, 67.5), (22.5 - 180, 67.5 - 180)],
-                                            'pure_contraQ': [(22.5 + 45, 67.5 + 45), (22.5 + 45 - 180, 67.5 + 45 - 180)],
-                                            'pure_ipsiQ': [(-22.5, 22.5), (-22.5 + 180, 180), (-180, -180 + 22.5)],}]
-}
+
 
 
 @st.cache_data(max_entries=100)
@@ -210,8 +193,6 @@ def _sig_proportion(ts, t_sign_level):
     ci_95 = 1.96 * np.sqrt(prop * (1 - prop) / len(ts))
     return prop * 100, ci_95 * 100, len(ts)
 
-def _to_theta_r(x, y):
-    return np.rad2deg(np.arctan2(y, x)), np.sqrt(x**2 + y**2)
 
 def plot_unit_sig_prop_bar(aois, period, t_sign_level):
     p_value = type_1_error[np.searchsorted(t_value, t_sign_level)]
@@ -312,9 +293,9 @@ def plot_unit_pure_sig_prop_bar(aois, period, t_sign_level, model='dQ, sumQ, rpe
 
         for unit_class, ranges in polar_classifiers[model][1].items():
             color = pure_unit_color_mapping[unit_class]
-            this = np.any([(a_min < theta) & (theta < a_max) for a_min, a_max in ranges], axis=0) 
-            this = this & (np.sqrt(x ** 2 + y ** 2) >= t_sign_level)
-            df_period_linear_fit_filtered[period, model_group, f'{unit_class}', ''] = this
+            if_pure_this = np.any([(a_min < theta) & (theta < a_max) for a_min, a_max in ranges], axis=0) 
+            if_pure_this = if_pure_this & (np.sqrt(x ** 2 + y ** 2) >= t_sign_level)
+            df_period_linear_fit_filtered[period, model_group, f'{unit_class}', ''] = if_pure_this
           
             prop_ci = df_period_linear_fit_filtered[period, model_group, f'{unit_class}', ''].groupby('area_of_interest').apply(_pure_proportion)  
                         
@@ -549,7 +530,7 @@ if __name__ == '__main__':
                                    list(period_name_mapper.keys()).index('iti_all'))
         
         _period = [p for p in period_name_mapper if period_name_mapper[p] == period][0]
-        t_sign_level = cols[0].slider('t value threshold', 1.0, 5.0, 2.57)
+        t_sign_level = cols[0].slider('t value threshold', 1.0, 5.0, 1.96)
         aois = cols[1].multiselect('Areas to include', st.session_state.aoi_color_mapping.keys(), st.session_state.aoi_color_mapping)
         
         # -- bar plot of significant units --

@@ -122,7 +122,7 @@ if 'df' not in st.session_state:
 with st.sidebar:
     add_unit_filter()
     st.session_state.sign_level = st.number_input("significant level: t >= ", 
-                                                value=st.session_state.sign_level if 'sign_level' in st.session_state else 2.57, 
+                                                value=st.session_state.sign_level if 'sign_level' in st.session_state else 1.96, 
                                                 disabled=False, step=1.0) #'significant' not in heatmap_aggr_name, step=1.0)
 
 # z_tuning_mappper = {'dQ_go_cue_before_2': dict(align_to='go_cue', time_win=[-2, 0], latent_name='relative_action_value_lr', latent_variable_offset=-1),

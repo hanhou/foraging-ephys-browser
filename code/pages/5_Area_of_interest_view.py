@@ -21,7 +21,7 @@ sig_prop_color_mapping =  {'dQ': 'darkviolet',
                             'rpe': 'gray'}
 
 @st.cache_data(ttl=24*3600)
-def plot_scatter(data, x_name='dQ_iti', y_name='sumQ_iti', if_use_ccf_color=False, sign_level=2.57, x_abs=False, y_abs=False):
+def plot_scatter(data, x_name='dQ_iti', y_name='sumQ_iti', if_use_ccf_color=False, sign_level=1.96, x_abs=False, y_abs=False):
     
     fig = go.Figure()
     
@@ -186,7 +186,7 @@ def app():
     with st.sidebar:
         add_unit_filter()
         st.session_state.sign_level = st.number_input("significant level: t >= ", 
-                                                      value=st.session_state.sign_level if 'sign_level' in st.session_state else 2.57, 
+                                                      value=st.session_state.sign_level if 'sign_level' in st.session_state else 1.96, 
                                                       disabled=False, step=1.0) #'significant' not in heatmap_aggr_name, step=1.0)
    
     # -- axes selector --

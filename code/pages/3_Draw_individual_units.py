@@ -120,7 +120,7 @@ def add_xy_selector():
 with st.sidebar:
     add_unit_filter()
     st.session_state.sign_level = st.number_input("significant level: t >= ", 
-                                                value=st.session_state.sign_level if 'sign_level' in st.session_state else 2.57, 
+                                                value=st.session_state.sign_level if 'sign_level' in st.session_state else 1.96, 
                                                 disabled=False, step=1.0) #'significant' not in heatmap_aggr_name, step=1.0)
 
 

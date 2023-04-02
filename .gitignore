@@ -3,3 +3,4 @@
 .streamlit/secrets.toml
 code/__pycache__/
 code/util/__pycache__/
+*.pyc
