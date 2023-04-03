@@ -146,10 +146,11 @@ def draw_selected_units(df_selected, draw_types, num_col):
     for i, key in enumerate(df_selected.reset_index().to_dict(orient='records')):
         key['session_date'] = datetime.strftime(datetime.strptime(str(key['session_date']), '%Y-%m-%d %H:%M:%S'), '%Y%m%d')
         col = cols[i%num_col]
+        col.markdown(f'''<h5 style='text-align: center; color: orange;'>{key["h2o"]}, ''' 
+            f'''Session {key["session"]}, {key['session_date']}, unit {key["unit"]} ({key["area_of_interest"]})</h3>''',
+            unsafe_allow_html=True)
+
         for draw_type in draw_types:
-            col.markdown(f'''<h5 style='text-align: center; color: orange;'>{key["h2o"]}, ''' 
-                        f'''Session {key["session"]}, {key['session_date']}, unit {key["unit"]} ({key["area_of_interest"]})</h3>''',
-                        unsafe_allow_html=True)
             img = draw_func_mapping[draw_type](key)
             if img is None:
                 col.markdown(f'{draw_type} fetch error')
