@@ -160,7 +160,7 @@ def init():
     # Type converting
     
     
-    st.session_state.unit_key_names = ['subject_id', 'session', 'insertion_number', 'unit', 'session_date', 'h2o']
+    st.session_state.unit_key_names = ['uid', 'subject_id', 'session', 'insertion_number', 'unit', 'session_date', 'h2o']
 
     st.session_state.aoi_color_mapping = {area: f'rgb({",".join(col.astype(str))})' for area, col in zip(df['aoi'].index, df['aoi'].rgb)}
     # Some global variables

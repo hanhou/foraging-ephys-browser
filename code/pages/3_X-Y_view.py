@@ -27,8 +27,10 @@ fs = s3fs.S3FileSystem(anon=False)
 if 'df' not in st.session_state: 
     init()
 
-def plot_scatter(data, size=10, opacity=0.5, equal_axis=False, show_diag=False):
-    df_xy = xy_to_plot['x']['column_selected'].join(xy_to_plot['y']['column_selected'])
+user_color_mapping = px.colors.qualitative.Plotly  # If not ccf color, use this color mapping
+
+def plot_scatter(data, size=10, opacity=0.5, equal_axis=False, show_diag=False, if_ccf_color=True):
+    df_xy = xy_to_plot['x']['column_selected'].join(xy_to_plot['y']['column_selected'], rsuffix='_y')
     df_xy.columns = ['x', 'y']
     
     x_name, y_name = data['x']['column_to_map_name'], data['y']['column_to_map_name']
@@ -59,22 +61,29 @@ def plot_scatter(data, size=10, opacity=0.5, equal_axis=False, show_diag=False):
             scaleratio = 1,
         )   
     
-    for aoi in st.session_state.df['aoi'].index:
-        if aoi not in df_xy.reset_index().area_of_interest.values:
-            continue
-        
+    df_xy = df_xy.reset_index()
+    for i, aoi in enumerate([aoi for aoi in st.session_state.df['aoi'].index 
+                             if aoi in df_xy.area_of_interest.values]):        
+        color = st.session_state.aoi_color_mapping[aoi] if if_ccf_color else user_color_mapping[i % len(user_color_mapping)]
         fig.add_trace(go.Scattergl(x=df_xy.query(f'area_of_interest == "{aoi}"').x, 
                                    y=df_xy.query(f'area_of_interest == "{aoi}"').y,
                                    mode="markers",
-                                   marker_color=st.session_state.aoi_color_mapping[aoi],
                                    marker=dict(symbol='circle', size=size, opacity=opacity, 
-                                                line=dict(color='gray', width=0.7),
-                                                color=st.session_state.aoi_color_mapping[aoi]), 
-                                   name=aoi))
+                                                line=dict(color='white', width=1),
+                                                color=color), 
+                                   name=aoi,
+                                   hovertemplate=  '%s' % aoi +
+                                                   ' (uid = %{customdata[0]})<br>' +
+                                                   '%{customdata[1]}, s%{customdata[2]}, i%{customdata[3]}, u%{customdata[4]}<br>' +
+                                                   '%s = %%{x:.4g}<br>%s = %%{y:.4g}<extra></extra>' % (x_name, y_name),
+                                   customdata=np.stack((df_xy.uid, df_xy.h2o, 
+                                                        df_xy.session, df_xy.insertion_number, df_xy.unit), axis=-1),
+                                   )
+                      )
        
         
-    fig.update_layout(width=900, height=800, font=dict(size=20), 
-                      hovermode='closest',
+    fig.update_layout(width=1000, height=900, font=dict(size=20), 
+                      hovermode='closest', showlegend=True,
                       xaxis_title=f"{x_name}, {uplf.period_name_mapper[data['x']['column_to_map'][0]]}", 
                       yaxis_title=f"{y_name}, {uplf.period_name_mapper[data['y']['column_to_map'][0]]}",)
             
@@ -187,31 +196,33 @@ if __name__ == '__main__':
         
         with st.expander('plot settings', expanded=True):
             cols = st.columns([1, 1, 0.7])
-            size = cols[0].slider('dot size', 1, 20, step=1, value=10)
+            size = cols[0].slider('dot size', 1, 30, step=1, value=10)
             opacity = cols[1].slider('opacity', 0.0, 1.0, step=0.05, value=0.7)
+            if_ccf_color = cols[2].checkbox('use ccf color', value=True)
             equal_axis = cols[2].checkbox('equal axis', value=xy_to_plot['x']['column_to_map'][2] == xy_to_plot['y']['column_to_map'][2])
             show_diag = cols[2].checkbox('show diagonal', value=xy_to_plot['x']['column_to_map_name'] == xy_to_plot['y']['column_to_map_name'])
+            
             
         # for i in range(2): st.write('\n')
 
         st.markdown("---")
         unit_plot_settings(need_click=False)
         
-    with col2:
-        if len(xy_to_plot['x']['column_selected']):
-            fig = plot_scatter(xy_to_plot, size=size, opacity=opacity, equal_axis=equal_axis, show_diag=show_diag)
-    
+    if len(xy_to_plot['x']['column_selected']):
+        with col2:
+            fig = plot_scatter(xy_to_plot, size=size, opacity=opacity, equal_axis=equal_axis, show_diag=show_diag, if_ccf_color=if_ccf_color)
+
             # Select other Plotly events by specifying kwargs
             selected_points_xy_view = plotly_events(fig, click_event=True, hover_event=False, select_event=True,
                                                     override_height=fig.layout.height*1.1, 
                                                     override_width=fig.layout.width, key='unit_scatter')
-    
-    if len(selected_points_xy_view):
-        df_xy = xy_to_plot['x']['column_selected'].join(xy_to_plot['y']['column_selected'])
-        df_xy.columns = ['x', 'y']
-        st.session_state.df_selected_xy_view = pd.concat([df_xy.query(f'x == {xy["x"]} and y == {xy["y"]}') 
-                                                        for xy in selected_points_xy_view], axis=0)
 
-        draw_selected_units(st.session_state.df_selected_xy_view, 
-                            st.session_state.draw_types,
-                            st.session_state.num_cols)
+        if len(selected_points_xy_view):
+            df_xy = xy_to_plot['x']['column_selected'].join(xy_to_plot['y']['column_selected'])
+            df_xy.columns = ['x', 'y']
+            st.session_state.df_selected_xy_view = pd.concat([df_xy.query(f'x == {xy["x"]} and y == {xy["y"]}') 
+                                                            for xy in selected_points_xy_view], axis=0)
+
+            draw_selected_units(st.session_state.df_selected_xy_view, 
+                                st.session_state.draw_types,
+                                st.session_state.num_cols)
