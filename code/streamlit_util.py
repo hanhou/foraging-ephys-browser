@@ -267,3 +267,42 @@ def filter_dataframe(df: pd.DataFrame) -> pd.DataFrame:
                     df = df[df[column].astype(str).str.contains(user_text_input)]
 
     return df
+
+
+def add_unit_filter():
+    with st.expander("Unit filter", expanded=True):   
+        st.session_state.df_unit_filtered = filter_dataframe(df=st.session_state.df['df_ephys_units'])
+        # Join with df_period_linear_fit_all here! (A huge dataframe with all things merged (flattened multi-level columns)
+        st.session_state.df_unit_filtered_merged = st.session_state.df_unit_filtered.set_index(st.session_state.unit_key_names + ['area_of_interest']
+                                                                                        ).join(st.session_state.df['df_period_linear_fit_all'], how='inner')
+        
+        n_units = len(st.session_state.df_unit_filtered)
+        n_animal = len(st.session_state.df_unit_filtered['subject_id'].unique())
+        n_insertion = len(st.session_state.df_unit_filtered.groupby(['subject_id', 'session', 'insertion_number']))
+        st.markdown(f'#### {n_units} units, {n_animal} mice, {n_insertion} insertions')
+
+def add_unit_selector():
+    with st.expander(f'Unit selector', expanded=True):
+        
+        n_units = len(st.session_state.df_unit_filtered)
+                        
+        with st.expander(f"Filtered: {n_units} units", expanded=False):
+            st.dataframe(st.session_state.df_unit_filtered)
+        
+        # cols = st.columns([4, 1])
+        # with cols[0].expander(f"From dataframe: {len(st.session_state.df_selected_from_dataframe)} sessions", expanded=False):
+        #     st.dataframe(st.session_state.df_selected_from_dataframe)
+        
+        # if cols[1].button('❌'):
+        #     st.session_state.df_selected_from_dataframe = pd.DataFrame()
+        #     st.experimental_rerun()
+        
+        cols = st.columns([4, 1])
+        with cols[0].expander(f"Selected: {len(st.session_state.df_selected_from_xy_view)} units", expanded=False):
+            st.dataframe(st.session_state.df_selected_from_xy_view)
+            
+        if cols[1].button('❌ '):
+            st.session_state.df_selected_from_xy_view = pd.DataFrame(columns=[st.session_state.unit_key_names])
+            # st.session_state.df_selected_from_dataframe = pd.DataFrame(columns=['h2o', 'session'])
+            st.experimental_rerun()
+        

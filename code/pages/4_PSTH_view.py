@@ -10,12 +10,12 @@ import dill
 import streamlit as st
 import streamlit_nested_layout
 from streamlit_plotly_events import plotly_events
-from streamlit_util import *
+from streamlit_util import add_unit_filter
 
 from util.z_score_psth import compute_group_tuning
 from util.plotly_util import add_plotly_errorbar
 
-from Home import add_unit_filter, init, select_t_sign_level
+from Home import init, select_t_sign_level
 
 
 export_folder = 'aind-behavior-data/Han/ephys/export/psth/'

@@ -14,7 +14,7 @@ from PIL import Image, ImageColor
 import streamlit.components.v1 as components
 import streamlit_nested_layout
 
-from streamlit_util import filter_dataframe, aggrid_interactive_table_units
+from streamlit_util import filter_dataframe, aggrid_interactive_table_units, add_unit_filter, add_unit_selector
 
 
 if_profile = False
@@ -75,19 +75,6 @@ def get_fig_unit_all_in_one(key):
             
     return img
  
-
-def add_unit_filter():
-    with st.expander("Unit filter", expanded=True):   
-        st.session_state.df_unit_filtered = filter_dataframe(df=st.session_state.df['df_ephys_units'])
-        # Join with df_period_linear_fit_all here! (A huge dataframe with all things merged (flattened multi-level columns)
-        st.session_state.df_unit_filtered_merged = st.session_state.df_unit_filtered.set_index(st.session_state.unit_key_names + ['area_of_interest']
-                                                                                        ).join(st.session_state.df['df_period_linear_fit_all'], how='inner')
-    
-    n_units = len(st.session_state.df_unit_filtered)
-    n_animal = len(st.session_state.df_unit_filtered['subject_id'].unique())
-    n_insertion = len(st.session_state.df_unit_filtered.groupby(['subject_id', 'session', 'insertion_number']))
-                      
-    st.markdown(f"### Filtered: {len(st.session_state.df_unit_filtered)} units, {n_animal} animals, {n_insertion} insertions")
 
 
 # For pure units
@@ -156,6 +143,7 @@ def init():
 
     df = load_data(['sessions', 'df_ephys_units', 'aoi', 'df_period_linear_fit_all'])
     st.session_state.df = df
+    st.session_state.df_selected_from_xy_view = pd.DataFrame(columns=['h2o', 'session'])
     
     # Type converting
     

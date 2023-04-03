@@ -4,12 +4,13 @@ from PIL import Image, ImageColor
 import pandas as pd
 import scipy
 from plotly.utils import image_array_to_data_uri
+import plotly.express as px
 
 import streamlit as st
 from streamlit_plotly_events import plotly_events
-from streamlit_util import *
+from streamlit_util import add_unit_filter
 
-from Home import add_unit_filter, init, select_t_sign_level, pure_unit_color_mapping
+from Home import init, select_t_sign_level, pure_unit_color_mapping
 
 import importlib
 uplf = importlib.import_module('.1_Linear_model_comparison', package='pages')

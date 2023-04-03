@@ -4,7 +4,7 @@ import plotly.graph_objects as go
 import numpy as np
 import pandas as pd
 
-from streamlit_util import filter_dataframe, aggrid_interactive_table_units
+from streamlit_util import filter_dataframe, aggrid_interactive_table_units, add_unit_selector, add_unit_filter
 from streamlit_plotly_events import plotly_events
 
 from datetime import datetime 
@@ -17,8 +17,7 @@ uplf = importlib.import_module('.1_Linear_model_comparison', package='pages')
 import s3fs
 from PIL import Image, ImageColor
 
-from Home import add_unit_filter, init, select_t_sign_level
-
+from Home import init, select_t_sign_level
 
 cache_fig_drift_metrics_folder = 'aind-behavior-data/Han/ephys/report/unit_drift_metrics/'
 cache_fig_psth_folder = 'aind-behavior-data/Han/ephys/report/all_units/'
@@ -29,7 +28,8 @@ if 'df' not in st.session_state:
 
 user_color_mapping = px.colors.qualitative.Plotly  # If not ccf color, use this color mapping
 
-def plot_scatter(data, size=10, opacity=0.5, equal_axis=False, show_diag=False, if_ccf_color=True):
+@st.cache_data(ttl=24*3600, show_spinner=False)
+def plot_scatter(data, size=10, opacity=0.5, equal_axis=False, show_diag=False, if_ccf_color=True, **kwarg):
     df_xy = xy_to_plot['x']['column_selected'].join(xy_to_plot['y']['column_selected'], rsuffix='_y')
     df_xy.columns = ['x', 'y']
     
@@ -61,29 +61,46 @@ def plot_scatter(data, size=10, opacity=0.5, equal_axis=False, show_diag=False, 
             scaleratio = 1,
         )   
     
-    df_xy = df_xy.reset_index()
+    df_color = pd.DataFrame.from_dict(st.session_state.aoi_color_mapping, orient='index', columns=['color'])
+    
+    # Batch define color
+    if not len(st.session_state.df_selected_from_xy_view):  # no selection
+        df_xy = df_xy.join(df_color, on='area_of_interest')  # all use normal colors
+        df_xy['opacity'] = opacity
+    else:
+        selected = st.session_state.df_selected_from_xy_view.index
+        df_xy['colors'] = 'lightgrey'  # default, grey
+        df_xy['opacity'] = 0.3  # default, grey
+        df_xy.loc[selected, 'colors'] = df_xy.loc[selected].join(df_color, on='area_of_interest').color  # only use normal colors for the selected dots
+        df_xy.loc[selected, 'opacity'] = opacity
+    
+    # For each aoi, plot the dots
     for i, aoi in enumerate([aoi for aoi in st.session_state.df['aoi'].index 
-                             if aoi in df_xy.area_of_interest.values]):        
-        color = st.session_state.aoi_color_mapping[aoi] if if_ccf_color else user_color_mapping[i % len(user_color_mapping)]
-        fig.add_trace(go.Scattergl(x=df_xy.query(f'area_of_interest == "{aoi}"').x, 
-                                   y=df_xy.query(f'area_of_interest == "{aoi}"').y,
-                                   mode="markers",
-                                   marker=dict(symbol='circle', size=size, opacity=opacity, 
+                             if aoi in df_xy.reset_index().area_of_interest.values]):
+        
+        df_xy_this = df_xy.query(f'area_of_interest == "{aoi}"').reset_index()
+        df_xy_this = pd.concat([df_xy_this.query('colors != "lightgrey"'), df_xy_this.query('colors == "lightgrey"')])
+    
+        fig.add_trace(go.Scattergl(x=df_xy_this.x, 
+                                y=df_xy_this.y,
+                                mode="markers",
+                                marker=dict(symbol='circle', size=size, opacity=df_xy_this.opacity.values, 
                                                 line=dict(color='white', width=1),
-                                                color=color), 
-                                   name=aoi,
-                                   hovertemplate=  '%s' % aoi +
-                                                   ' (uid = %{customdata[0]})<br>' +
-                                                   '%{customdata[1]}, s%{customdata[2]}, i%{customdata[3]}, u%{customdata[4]}<br>' +
-                                                   '%s = %%{x:.4g}<br>%s = %%{y:.4g}<extra></extra>' % (x_name, y_name),
-                                   customdata=np.stack((df_xy.uid, df_xy.h2o, 
-                                                        df_xy.session, df_xy.insertion_number, df_xy.unit), axis=-1),
-                                   )
-                      )
+                                                color=df_xy_this.colors.values), 
+                                name=aoi,
+                                hovertemplate=  '%s' % aoi +
+                                                ' (uid = %{customdata[0]})<br>' +
+                                                '%{customdata[1]}, s%{customdata[2]}, i%{customdata[3]}, u%{customdata[4]}<br>' +
+                                                '%s = %%{x:.4g}<br>%s = %%{y:.4g}<extra></extra>' % (x_name, y_name),
+                                customdata=np.stack((df_xy_this.uid, df_xy_this.h2o, 
+                                                        df_xy_this.session, df_xy_this.insertion_number, df_xy_this.unit), axis=-1),
+                                unselected=dict(marker_color='lightgrey'),
+                                )
+                    )
        
         
     fig.update_layout(width=1000, height=900, font=dict(size=20), 
-                      hovermode='closest', showlegend=True,
+                      hovermode='closest', showlegend=True, dragmode='select',
                       xaxis_title=f"{x_name}, {uplf.period_name_mapper[data['x']['column_to_map'][0]]}", 
                       yaxis_title=f"{y_name}, {uplf.period_name_mapper[data['y']['column_to_map'][0]]}",)
             
@@ -164,14 +181,14 @@ def add_xy_selector():
 
 
 def unit_plot_settings(need_click=True):
-    st.markdown('##### Show plots for individual units ')
+    st.markdown('##### Show plots for selected units from the XY view')
     cols = st.columns([3, 1])
 
     st.session_state.draw_types = cols[0].multiselect('Which plot(s) to draw?', ['psth', 'drift metrics'], default=['psth'])
     st.session_state.num_cols = cols[1].number_input('Number of columns', 1, 10, 3)
     
     if need_click:
-        draw_it = st.button('Show me all sessions!', use_container_width=True)
+        draw_it = st.button(f'Show me all {len(st.session_state.df_selected_from_xy_view)} units!', use_container_width=True)
     else:
         draw_it = True
     return draw_it
@@ -187,6 +204,8 @@ if __name__ == '__main__':
         
         with st.expander('t-value threshold', expanded=True):
             select_t_sign_level()
+        
+        add_unit_selector()
 
     st.session_state.aggrid_outputs = aggrid_interactive_table_units(df=st.session_state.df_unit_filtered, height=300)
     col1, _, col2 = st.columns((1, 0.1, 1.5))
@@ -206,11 +225,14 @@ if __name__ == '__main__':
         # for i in range(2): st.write('\n')
 
         st.markdown("---")
-        unit_plot_settings(need_click=False)
+        if_draw_units = unit_plot_settings(need_click=True)
         
     if len(xy_to_plot['x']['column_selected']):
         with col2:
-            fig = plot_scatter(xy_to_plot, size=size, opacity=opacity, equal_axis=equal_axis, show_diag=show_diag, if_ccf_color=if_ccf_color)
+            fig = plot_scatter(xy_to_plot, size=size, opacity=opacity, 
+                               equal_axis=equal_axis, show_diag=show_diag, if_ccf_color=if_ccf_color,
+                               state=st.session_state.df_selected_from_xy_view   # Trigger replot when df_selected_from_xy_view changes, otherwise, the plot is cached
+                               )
 
             # Select other Plotly events by specifying kwargs
             selected_points_xy_view = plotly_events(fig, click_event=True, hover_event=False, select_event=True,
@@ -220,9 +242,14 @@ if __name__ == '__main__':
         if len(selected_points_xy_view):
             df_xy = xy_to_plot['x']['column_selected'].join(xy_to_plot['y']['column_selected'])
             df_xy.columns = ['x', 'y']
-            st.session_state.df_selected_xy_view = pd.concat([df_xy.query(f'x == {xy["x"]} and y == {xy["y"]}') 
+            df_selected_from_xy_view = pd.concat([df_xy.query(f'x == {xy["x"]} and y == {xy["y"]}') 
                                                             for xy in selected_points_xy_view], axis=0)
-
-            draw_selected_units(st.session_state.df_selected_xy_view, 
-                                st.session_state.draw_types,
-                                st.session_state.num_cols)
+            
+            # If selected units change, rerun the whole app
+            if len(df_selected_from_xy_view) and not (set(df_selected_from_xy_view.index) == 
+                                                      set(st.session_state.df_selected_from_xy_view.index)):
+                st.session_state.df_selected_from_xy_view = df_selected_from_xy_view
+                st.experimental_rerun()
+        
+            if if_draw_units:
+                draw_selected_units(df_selected_from_xy_view, st.session_state.draw_types, st.session_state.num_cols)
