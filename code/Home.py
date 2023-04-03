@@ -117,8 +117,8 @@ def compute_pure_polar_classification(t_sign_level=1.96):
                 if_pure_this = if_pure_this & (np.sqrt(x ** 2 + y ** 2) >= t_sign_level)
                 df.loc[:, (period, model, f'{unit_class}', '')] = if_pure_this.astype(int)
 
-# --- t and p-value threshold ---
 
+# --- t and p-value threshold ---
 t_to_p = lambda t: 2 * norm.sf(t)
 p_to_t = lambda p: norm.ppf(1 - p / 2)
 

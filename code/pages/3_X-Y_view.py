@@ -61,18 +61,16 @@ def plot_scatter(data, size=10, opacity=0.5, equal_axis=False, show_diag=False, 
             scaleratio = 1,
         )   
     
-    df_color = pd.DataFrame.from_dict(st.session_state.aoi_color_mapping, orient='index', columns=['color'])
+    df_color = pd.DataFrame.from_dict(st.session_state.aoi_color_mapping, orient='index', columns=['colors'])
     
     # Batch define color
-    if not len(st.session_state.df_selected_from_xy_view):  # no selection
-        df_xy = df_xy.join(df_color, on='area_of_interest')  # all use normal colors
-        df_xy['opacity'] = opacity
-    else:
-        selected = st.session_state.df_selected_from_xy_view.index
-        df_xy['colors'] = 'lightgrey'  # default, grey
-        df_xy['opacity'] = 0.3  # default, grey
-        df_xy.loc[selected, 'colors'] = df_xy.loc[selected].join(df_color, on='area_of_interest').color  # only use normal colors for the selected dots
-        df_xy.loc[selected, 'opacity'] = opacity
+    df_xy = df_xy.join(df_color, on='area_of_interest')  # all use normal colors
+    df_xy['opacity'] = opacity
+
+    if len(st.session_state.df_selected_from_xy_view):  # If there are selected dots, put unselcted dots to gray
+        un_selected = ~df_xy.index.isin(st.session_state.df_selected_from_xy_view.index)
+        df_xy.loc[un_selected, 'colors'] = 'lightgrey'
+        df_xy.loc[un_selected, 'opacity'] = 0.3
     
     # For each aoi, plot the dots
     for i, aoi in enumerate([aoi for aoi in st.session_state.df['aoi'].index 
@@ -147,14 +145,18 @@ def draw_selected_units(df_selected, draw_types, num_col):
     
     for i, key in enumerate(df_selected.reset_index().to_dict(orient='records')):
         key['session_date'] = datetime.strftime(datetime.strptime(str(key['session_date']), '%Y-%m-%d %H:%M:%S'), '%Y%m%d')
+        col = cols[i%num_col]
         for draw_type in draw_types:
+            col.markdown(f'''<h5 style='text-align: center; color: orange;'>{key["h2o"]}, ''' 
+                        f'''Session {key["session"]}, {key['session_date']}, unit {key["unit"]} ({key["area_of_interest"]})</h3>''',
+                        unsafe_allow_html=True)
             img = draw_func_mapping[draw_type](key)
             if img is None:
-                cols[i%num_col].markdown(f'{draw_type} fetch error')
+                col.markdown(f'{draw_type} fetch error')
             else:
-                cols[i%num_col].image(img, output_format='PNG', use_column_width=True)
+                col.image(img, output_format='PNG', use_column_width=True)
         
-        cols[i % 3].markdown("---")
+        col.markdown("---")
         my_bar.progress(int((i + 1) / len(df_selected) * 100))
 
 
@@ -181,17 +183,24 @@ def add_xy_selector():
 
 
 def unit_plot_settings(need_click=True):
-    st.markdown('##### Show plots for selected units from the XY view')
+    
     cols = st.columns([3, 1])
+    cols[0].markdown('##### Show plots for selected units from the XY view')
+    if cols[1].button('❌  clear selection', use_container_width=True):
+        st.session_state.df_selected_from_xy_view = pd.DataFrame(columns=[st.session_state.unit_key_names])
+        st.experimental_rerun()
 
+    cols = st.columns([3, 1])
     st.session_state.draw_types = cols[0].multiselect('Which plot(s) to draw?', ['psth', 'drift metrics'], default=['psth'])
     st.session_state.num_cols = cols[1].number_input('Number of columns', 1, 10, 3)
     
     if need_click:
-        draw_it = st.button(f'Show me all {len(st.session_state.df_selected_from_xy_view)} units!', use_container_width=True)
+        cols = st.columns([1, 3])
+        auto_draw = cols[0].checkbox('Auto draw', value=False)
+        draw_it = cols[1].button(f'Show me all {len(st.session_state.df_selected_from_xy_view)} units!', use_container_width=True)
     else:
         draw_it = True
-    return draw_it
+    return draw_it or auto_draw
 
 
 # --------------------------------
