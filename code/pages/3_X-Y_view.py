@@ -97,10 +97,13 @@ def plot_scatter(data, size=10, opacity=0.5, equal_axis=False, show_diag=False, 
                     )
        
         
+    x_period = f", {uplf.period_name_mapper[data['x']['column_to_map'][0]]}" if isinstance(data['x']['column_to_map'], list) else ''
+    y_period = f", {uplf.period_name_mapper[data['y']['column_to_map'][0]]}" if isinstance(data['y']['column_to_map'], list) else ''
+    
     fig.update_layout(width=1000, height=900, font=dict(size=20), 
                       hovermode='closest', showlegend=True, dragmode='select',
-                      xaxis_title=f"{x_name}, {uplf.period_name_mapper[data['x']['column_to_map'][0]]}", 
-                      yaxis_title=f"{y_name}, {uplf.period_name_mapper[data['y']['column_to_map'][0]]}",)
+                      xaxis_title=x_name + x_period, 
+                      yaxis_title=y_name + y_period,)
             
     return fig
 
