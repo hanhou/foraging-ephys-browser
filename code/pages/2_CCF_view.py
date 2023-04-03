@@ -239,7 +239,8 @@ def plot_coronal_slice_unit(ccf_x, coronal_slice_thickness, if_flip, *args):
                                coronal_edges, message)
 
     # -- overlayed units --
-    units_to_overlay = st.session_state.df_unit_filtered_merged.query(f'{ccf_x - coronal_slice_thickness/2} < ccf_x and ccf_x <= {ccf_x + coronal_slice_thickness/2}')
+    units_to_overlay = st.session_state.df_unit_filtered_merged.reset_index(
+        ).query(f'{ccf_x - coronal_slice_thickness/2} < ccf_x and ccf_x <= {ccf_x + coronal_slice_thickness/2}')
     
     if len(units_to_overlay):
     
@@ -307,7 +308,8 @@ def plot_saggital_slice_unit(ccf_z, saggital_slice_thickness, if_flip, *args):
             to_flip_value = st.session_state.df_unit_filtered_merged['ccf_z_in_slice_plot'][to_flip_idx]
             st.session_state.df_unit_filtered_merged.loc[to_flip_idx, 'ccf_z_in_slice_plot'] = 2 * 5700 - to_flip_value
             
-        units_to_overlay = st.session_state.df_unit_filtered_merged.query(f'{ccf_z - saggital_slice_thickness/2} < ccf_z_in_slice_plot and ccf_z_in_slice_plot <= {ccf_z + saggital_slice_thickness/2}')
+        units_to_overlay = st.session_state.df_unit_filtered_merged.reset_index(
+            ).query(f'{ccf_z - saggital_slice_thickness/2} < ccf_z_in_slice_plot and ccf_z_in_slice_plot <= {ccf_z + saggital_slice_thickness/2}')
     
     if len(units_to_overlay):
         x = units_to_overlay['ccf_x']
@@ -452,17 +454,17 @@ def select_para_of_interest(prompt="Map what to CCF?", suffix='',
         column_to_map_name = column_to_map
         if_map_pure = False
     
-    values_to_map = st.session_state.df_unit_filtered_merged[column_to_map].values
-    values_to_map = values_to_map[~np.isnan(values_to_map)]
-
-    if_take_abs = st.checkbox("Use abs()?", value=False, key='abs'+suffix) if any(values_to_map < 0) else False
+    column_selected = st.session_state.df_unit_filtered_merged.loc[:, [column_to_map]]
+    column_selected.dropna(inplace=True)
+    
+    if_take_abs = st.checkbox("Use abs()?", value=False, key='abs'+suffix) if np.any(column_selected < 0) else False
 
     if if_take_abs:
-        values_to_map = np.abs(values_to_map)
+        column_selected = np.abs(column_selected)
         
     return dict(column_to_map=column_to_map, column_to_map_name=column_to_map_name, 
                 if_map_pure=if_map_pure, if_take_abs=if_take_abs,
-                values_to_map=values_to_map)
+                column_selected=column_selected)
 
 if __name__ == '__main__':
 
@@ -476,13 +478,13 @@ if __name__ == '__main__':
             
             with st.expander('Value mapping', expanded=True):
                 para = select_para_of_interest()
-                column_to_map, column_to_map_name, if_map_pure, if_take_abs, values_to_map = \
-                    para['column_to_map'], para['column_to_map_name'], para['if_map_pure'], para['if_take_abs'], para['values_to_map']
+                column_to_map, column_to_map_name, if_map_pure, if_take_abs, column_selected = \
+                    para['column_to_map'], para['column_to_map_name'], para['if_map_pure'], para['if_take_abs'], para['column_selected']
 
                     
                 # Add a small histogram
                 if column_to_map != 'number_units' and not if_map_pure:
-                    counts, bins = np.histogram(values_to_map, bins=100)        
+                    counts, bins = np.histogram(column_selected, bins=100)        
                     fig = px.bar(x=bins[1:], y=counts)
                     # fig.add_vrect(x0=user_num_input[0], x1=user_num_input[1], fillcolor='red', opacity=0.1, line_width=0)
                     fig.update_layout(showlegend=False, height=100, 
@@ -517,8 +519,8 @@ if __name__ == '__main__':
                         if 'sign' in heatmap_aggr_name or if_map_pure: 
                             sign_level = select_t_sign_level(st)
 
-                        if_bi_directional_heatmap = (any(values_to_map < 0) + any(values_to_map > 0)) == 2 and r'%' not in heatmap_aggr_name 
-                        heatmap_aggr_func, heatmap_color_ranges = _ccf_heatmap_get_aggr_func_and_range(heatmap_aggr_name, column_to_map, values_to_map)
+                        if_bi_directional_heatmap = (any(column_selected < 0) + any(column_selected > 0)) == 2 and r'%' not in heatmap_aggr_name 
+                        heatmap_aggr_func, heatmap_color_ranges = _ccf_heatmap_get_aggr_func_and_range(heatmap_aggr_name, column_to_map, column_selected)
                         heatmap_color_range = st.slider(f"Heatmap color range", 
                                                         heatmap_color_ranges[0], heatmap_color_ranges[1],
                                                         step=heatmap_color_ranges[2], value=heatmap_color_ranges[3])

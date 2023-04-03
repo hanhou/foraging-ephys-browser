@@ -6,7 +6,7 @@ import numpy as np
 from Home import add_unit_filter, get_fig_unit_all_in_one, init, select_t_sign_level
 
 import importlib
-package_xy_view = importlib.import_module('.3_X-Y_view', package='pages')
+xy_view = importlib.import_module('.3_X-Y_view', package='pages')
 
 
 if 'df' not in st.session_state: 
@@ -123,8 +123,8 @@ def app():
     # -- scatter --
     col1, col2 = st.columns((1, 1))
     with col1:  # Raw scatter
-        selected_points_scatter = package_xy_view.add_scatter_return_selected(st.session_state.df_unit_filtered, x_name, y_name)
-                    
+        # selected_points_scatter = xy_view.add_scatter_return_selected(st.session_state.df_unit_filtered, x_name, y_name)
+        pass
         
     with col2: # Polar distribution
         if len(st.session_state.df_unit_filtered):   
@@ -165,9 +165,9 @@ def app():
         #     st.image(unit_fig, output_format='PNG', width=3000)
 
      
-    if selected_points_scatter and selected_points_scatter != st.session_state.selected_points:
-        st.session_state.selected_points = selected_points_scatter
-        st.experimental_rerun()
+    # if selected_points_scatter and selected_points_scatter != st.session_state.selected_points:
+    #     st.session_state.selected_points = selected_points_scatter
+    #     st.experimental_rerun()
         
 if __name__ == '__main__':
     app()

@@ -58,7 +58,7 @@ def load_data(tables=['sessions']):
 def get_fig_unit_all_in_one(key):
     sess_date_str = datetime.strftime(datetime.strptime(key['session_date'], '%Y-%m-%dT%H:%M:%S'), '%Y%m%d')
     
-    fn = f'*{key["h2o"]}_{sess_date_str}_{key["ins"]}*u{key["unit"]:03}*'
+    fn = f'*{key["h2o"]}_{sess_date_str}_{key["insertion_number"]}*u{key["unit"]:03}*'
     aoi = key["area_of_interest"]
     
     if use_s3:
@@ -80,7 +80,7 @@ def add_unit_filter():
     with st.expander("Unit filter", expanded=True):   
         st.session_state.df_unit_filtered = filter_dataframe(df=st.session_state.df['df_ephys_units'])
         # Join with df_period_linear_fit_all here! (A huge dataframe with all things merged (flattened multi-level columns)
-        st.session_state.df_unit_filtered_merged = st.session_state.df_unit_filtered.set_index(st.session_state.unit_key_names
+        st.session_state.df_unit_filtered_merged = st.session_state.df_unit_filtered.set_index(st.session_state.unit_key_names + ['area_of_interest']
                                                                                         ).join(st.session_state.df['df_period_linear_fit_all'], how='inner')
     
     n_units = len(st.session_state.df_unit_filtered)
@@ -128,7 +128,7 @@ def compute_pure_polar_classification(t_sign_level=1.96):
             for unit_class, ranges in polar_classifiers[classfier_key][1].items():
                 if_pure_this = np.any([(a_min < theta) & (theta < a_max) for a_min, a_max in ranges], axis=0) 
                 if_pure_this = if_pure_this & (np.sqrt(x ** 2 + y ** 2) >= t_sign_level)
-                df[period, model, f'{unit_class}', ''] = if_pure_this.astype(int)
+                df.loc[:, (period, model, f'{unit_class}', '')] = if_pure_this.astype(int)
 
 # --- t and p-value threshold ---
 
@@ -145,11 +145,6 @@ def select_t_sign_level(col=st):
                       value=t_now,
                       key='t_sign_level',
                       on_change=_on_change_t_sign_level)
-    # return col.number_input(f"significant level: t >= {st.session_state['t_sign_level']}", 
-    #                                                  value=st.session_state['t_sign_level'], 
-    #                                                  min_value=0.0, step=0.1,
-    #                                                 key='t_sign_level',
-    #                                                 on_change=_on_change_t_sign_level)   # Update pure polar classification
 
 def init():
     st.set_page_config(layout="wide", page_title='Foraging ephys browser',
@@ -161,7 +156,11 @@ def init():
 
     df = load_data(['sessions', 'df_ephys_units', 'aoi', 'df_period_linear_fit_all'])
     st.session_state.df = df
-    st.session_state.unit_key_names = ['subject_id', 'session', 'insertion_number', 'unit']
+    
+    # Type converting
+    
+    
+    st.session_state.unit_key_names = ['subject_id', 'session', 'insertion_number', 'unit', 'session_date', 'h2o']
 
     st.session_state.aoi_color_mapping = {area: f'rgb({",".join(col.astype(str))})' for area, col in zip(df['aoi'].index, df['aoi'].rgb)}
     # Some global variables

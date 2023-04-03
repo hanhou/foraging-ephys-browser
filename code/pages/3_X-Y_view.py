@@ -2,6 +2,7 @@ import streamlit as st
 import plotly.express as px
 import plotly.graph_objects as go
 import numpy as np
+import pandas as pd
 
 from streamlit_util import filter_dataframe, aggrid_interactive_table_units
 from streamlit_plotly_events import plotly_events
@@ -10,6 +11,8 @@ from datetime import datetime
 
 import importlib
 ccf_view = importlib.import_module('.2_CCF_view', package='pages')
+uplf = importlib.import_module('.1_Linear_model_comparison', package='pages')
+
 
 import s3fs
 from PIL import Image, ImageColor
@@ -24,90 +27,62 @@ fs = s3fs.S3FileSystem(anon=False)
 if 'df' not in st.session_state: 
     init()
 
-@st.cache_data(ttl=24*3600)
-def plot_scatter(data, x_name='dQ_iti', y_name='sumQ_iti', if_use_ccf_color=False, sign_level=1.96, x_abs=False, y_abs=False):
+def plot_scatter(data, size=10, opacity=0.5, equal_axis=False, show_diag=False):
+    df_xy = xy_to_plot['x']['column_selected'].join(xy_to_plot['y']['column_selected'])
+    df_xy.columns = ['x', 'y']
+    
+    x_name, y_name = data['x']['column_to_map_name'], data['y']['column_to_map_name']
     
     fig = go.Figure()
     
-    for aoi in st.session_state.df['aoi'].index:
-        if aoi not in st.session_state.df_unit_filtered.area_of_interest.values:
-            continue
-        
-        this_aoi = data.query(f'area_of_interest == "{aoi}"')
-        fig.add_trace(go.Scattergl(x=np.abs(this_aoi[x_name]) if x_abs else this_aoi[x_name], 
-                                 y=np.abs(this_aoi[y_name]) if y_abs else this_aoi[y_name],
-                                 mode="markers",
-                                 marker_color=st.session_state.aoi_color_mapping[aoi] if if_use_ccf_color else None,
-                                 name=aoi))
-        
-    # fig = px.scatter(data, x=x_name, y=y_name, 
-    #                 color='area_of_interest', symbol="area_of_interest",
-    #                 hover_data=['annotation'],
-    #                 color_discrete_map=aoi_color_mapping if if_use_ccf_color else None)
-    
     if 't_' in x_name:
-        fig.add_vline(x=sign_level, line_width=1, line_dash="dash", line_color="black")
-        if not x_abs: 
-            fig.add_vline(x=-sign_level, line_width=1, line_dash="dash", line_color="black")
+        fig.add_vline(x=st.session_state['t_sign_level'], line_width=1, line_dash="dash", line_color="black")
+        if not data['x']['if_take_abs']: 
+            fig.add_vline(x=-st.session_state['t_sign_level'], line_width=1, line_dash="dash", line_color="black")
     if 't_' in y_name:
-        fig.add_hline(y=sign_level, line_width=1, line_dash="dash", line_color="black")
-        if not y_abs:
-            fig.add_hline(y=-sign_level, line_width=1, line_dash="dash", line_color="black")
-        
-    # fig.update_xaxes(range=[-40, 40])
-    # fig.update_yaxes(range=[-40, 40])
+        fig.add_hline(y=st.session_state['t_sign_level'], line_width=1, line_dash="dash", line_color="black")
+        if not data['y']['if_take_abs']:
+            fig.add_hline(y=-st.session_state['t_sign_level'], line_width=1, line_dash="dash", line_color="black")
     
-    fig.update_layout(width=900, height=800, font=dict(size=20), xaxis_title=x_name, yaxis_title=y_name)
+    if show_diag:
+        _min = df_xy.values.ravel().min()
+        _max = df_xy.values.ravel().max()
+        fig.add_trace(go.Scattergl(x=[_min, _max], 
+                                   y=[_min, _max], mode='lines',
+                                   line=dict(dash='dash', color='gray', width=1.1),
+                                   showlegend=False)
+                      )
     
-    if all(any([s in name for s in ['t_', 'beta_']]) for name in [x_name, y_name]):
+    if equal_axis:
         fig.update_yaxes(
             scaleanchor = "x",
             scaleratio = 1,
-        )
+        )   
+    
+    for aoi in st.session_state.df['aoi'].index:
+        if aoi not in df_xy.reset_index().area_of_interest.values:
+            continue
+        
+        fig.add_trace(go.Scattergl(x=df_xy.query(f'area_of_interest == "{aoi}"').x, 
+                                   y=df_xy.query(f'area_of_interest == "{aoi}"').y,
+                                   mode="markers",
+                                   marker_color=st.session_state.aoi_color_mapping[aoi],
+                                   marker=dict(symbol='circle', size=size, opacity=opacity, 
+                                                line=dict(color='gray', width=0.7),
+                                                color=st.session_state.aoi_color_mapping[aoi]), 
+                                   name=aoi))
+       
+        
+    fig.update_layout(width=900, height=800, font=dict(size=20), 
+                      hovermode='closest',
+                      xaxis_title=f"{x_name}, {uplf.period_name_mapper[data['x']['column_to_map'][0]]}", 
+                      yaxis_title=f"{y_name}, {uplf.period_name_mapper[data['y']['column_to_map'][0]]}",)
             
     return fig
 
-def add_scatter_return_selected(data, x_name, y_name, x_abs=False, y_abs=False):
-    if len(data):
-        if_use_ccf_color = True # st.checkbox("Use ccf color", value=True)
-        fig = plot_scatter(data, x_name=x_name, y_name=y_name, 
-                            if_use_ccf_color=if_use_ccf_color, 
-                            sign_level=st.session_state['t_sign_level'],
-                            x_abs=x_abs,
-                            y_abs=y_abs)
-        
-        if len(st.session_state.selected_points):
-            fig.add_trace(go.Scattergl(x=[st.session_state.selected_points[0]['x']], 
-                                     y=[st.session_state.selected_points[0]['y']], 
-                                mode='markers',
-                                marker_symbol='star',
-                                marker_size=15,
-                                marker_color='black',
-                                name='selected'))
-            
-        # if 'selected_points_scatter' in st.session_state and len(st.session_state.selected_points_scatter):
-        #     fig.add_trace(go.Scatter(x=[pt['x'] for pt in st.session_state.selected_points_scatter], 
-        #                         y=[pt['y'] for pt in st.session_state.selected_points_scatter], 
-        #                         mode='markers',
-        #                         marker_symbol='star',
-        #                         marker_size=15,
-        #                         marker_color='black',
-        #                         name='selected'))    
-        
-        fig.update_layout(height=900, width=1000, font=dict(size=20),
-                          hovermode='closest',)       
-        
-        # Select other Plotly events by specifying kwargs
-        selected_points_scatter = plotly_events(fig, click_event=True, hover_event=False, select_event=True,
-                                                override_height=fig.layout.height*1.1, 
-                                                override_width=fig.layout.width, key='unit_scatter')
-    return selected_points_scatter
-
-
+@st.cache_data(max_entries=100)
 def get_fig_unit_psth_only(key):
-    sess_date_str = datetime.strftime(datetime.strptime(key['session_date'], '%Y-%m-%dT%H:%M:%S'), '%Y%m%d')
-    
-    fn = f'*{key["h2o"]}_{sess_date_str}_{key["insertion_number"]}*u{key["unit"]:03}*'
+    fn = f'*{key["h2o"]}_{key["session_date"]}_{key["insertion_number"]}*u{key["unit"]:03}*'
     aoi = key["area_of_interest"]
     
     file = fs.glob(cache_fig_psth_folder + ('' if aoi == 'others' else aoi + '/') + fn)
@@ -120,7 +95,7 @@ def get_fig_unit_psth_only(key):
             
     return img
 
-
+@st.cache_data(max_entries=100)
 def get_fig_unit_drift_metric(key):
     fn = f'*{key["subject_id"]}_{key["session"]}_{key["insertion_number"]}_{key["unit"]:03}*'
     
@@ -137,34 +112,29 @@ def get_fig_unit_drift_metric(key):
 draw_func_mapping = {'psth': get_fig_unit_psth_only,
                      'drift metrics': get_fig_unit_drift_metric}
 
-def draw_selected_units(selected_points, draw_types, x_name, y_name, x_abs, y_abs):
-    st.write(f'Draw unit plot for selected {len(selected_points)} units')
+def draw_selected_units(df_selected, draw_types, num_col):
+    
+    st.write(f'Loading selected {len(df_selected)} units...')
     my_bar = st.columns((1, 7))[0].progress(0)
 
-    cols = st.columns((1, 1, 1))
+    cols = st.columns([1]*num_col)
     
-    for i, xy in enumerate(selected_points):
-        q_x = f'abs({x_name}) == {xy["x"]}' if x_abs else f'{x_name} == {xy["x"]}'
-        q_y = f'abs({y_name}) == {xy["y"]}' if y_abs else f'{y_name} == {xy["y"]}'
-        key = st.session_state.df_unit_filtered.query(f'{q_x} and {q_y}')
-        if len(key):
-            for draw_type in draw_types:
-                img = draw_func_mapping[draw_type](key.iloc[0])
-                if img is None:
-                    cols[i % 3].markdown(f'{draw_type} fetch error')
-                else:
-                    cols[i % 3].image(img, output_format='PNG', use_column_width=True)
-        else:
-            cols[i % 3].markdown('Unit not found')
-            
+    for i, key in enumerate(df_selected.reset_index().to_dict(orient='records')):
+        key['session_date'] = datetime.strftime(datetime.strptime(str(key['session_date']), '%Y-%m-%d %H:%M:%S'), '%Y%m%d')
+        for draw_type in draw_types:
+            img = draw_func_mapping[draw_type](key)
+            if img is None:
+                cols[i%num_col].markdown(f'{draw_type} fetch error')
+            else:
+                cols[i%num_col].image(img, output_format='PNG', use_column_width=True)
+        
         cols[i % 3].markdown("---")
-        my_bar.progress(int((i + 1) / len(selected_points) * 100))
-    pass
+        my_bar.progress(int((i + 1) / len(df_selected) * 100))
 
 
 def add_xy_selector():
     
-    with st.form(key='X-Y_selector'):
+    with st.expander('XY selector', expanded=True):
         col3, col4 = st.columns([1, 1])
         with col3:
             st.markdown('### X axis')
@@ -179,26 +149,69 @@ def add_xy_selector():
                                                                  default_period='iti_all',
                                                                  default_paras='total_action_value',))
             
-        st.form_submit_button("update axes")
+        # st.form_submit_button("update axes")
 
     return xy_selected
+
+
+def unit_plot_settings(need_click=True):
+    st.markdown('##### Show plots for individual units ')
+    cols = st.columns([3, 1])
+
+    st.session_state.draw_types = cols[0].multiselect('Which plot(s) to draw?', ['psth', 'drift metrics'], default=['psth'])
+    st.session_state.num_cols = cols[1].number_input('Number of columns', 1, 10, 3)
+    
+    if need_click:
+        draw_it = st.button('Show me all sessions!', use_container_width=True)
+    else:
+        draw_it = True
+    return draw_it
 
 
 # --------------------------------
 if __name__ == '__main__':
     with st.sidebar:
-        add_unit_filter()
+        try:
+            add_unit_filter()
+        except:
+            st.experimental_rerun()
+        
         with st.expander('t-value threshold', expanded=True):
             select_t_sign_level()
 
     st.session_state.aggrid_outputs = aggrid_interactive_table_units(df=st.session_state.df_unit_filtered, height=300)
-    col1, col2 = st.columns((1, 1.5))
+    col1, _, col2 = st.columns((1, 0.1, 1.5))
 
     with col1:
-        xy_selected = add_xy_selector()
-        draw_types = st.multiselect('Which plot(s) to draw?', ['psth', 'drift metrics'], default=['psth'])
+        xy_to_plot = add_xy_selector()
+        
+        with st.expander('plot settings', expanded=True):
+            cols = st.columns([1, 1, 0.7])
+            size = cols[0].slider('dot size', 1, 20, step=1, value=10)
+            opacity = cols[1].slider('opacity', 0.0, 1.0, step=0.05, value=0.7)
+            equal_axis = cols[2].checkbox('equal axis', value=xy_to_plot['x']['column_to_map'][2] == xy_to_plot['y']['column_to_map'][2])
+            show_diag = cols[2].checkbox('show diagonal', value=xy_to_plot['x']['column_to_map_name'] == xy_to_plot['y']['column_to_map_name'])
+            
+        # for i in range(2): st.write('\n')
+
+        st.markdown("---")
+        unit_plot_settings(need_click=False)
+        
     with col2:
-        selected_points_scatter = add_scatter_return_selected(st.session_state.df_unit_filtered, draw_types)
+        if len(xy_to_plot['x']['column_selected']):
+            fig = plot_scatter(xy_to_plot, size=size, opacity=opacity, equal_axis=equal_axis, show_diag=show_diag)
+    
+            # Select other Plotly events by specifying kwargs
+            selected_points_xy_view = plotly_events(fig, click_event=True, hover_event=False, select_event=True,
+                                                    override_height=fig.layout.height*1.1, 
+                                                    override_width=fig.layout.width, key='unit_scatter')
+    
+    if len(selected_points_xy_view):
+        df_xy = xy_to_plot['x']['column_selected'].join(xy_to_plot['y']['column_selected'])
+        df_xy.columns = ['x', 'y']
+        st.session_state.df_selected_xy_view = pd.concat([df_xy.query(f'x == {xy["x"]} and y == {xy["y"]}') 
+                                                        for xy in selected_points_xy_view], axis=0)
 
-
-    draw_selected_units(selected_points_scatter, draw_types, draw_types)
+        draw_selected_units(st.session_state.df_selected_xy_view, 
+                            st.session_state.draw_types,
+                            st.session_state.num_cols)
