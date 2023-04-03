@@ -428,7 +428,7 @@ def select_para_of_interest(prompt="Map what to CCF?", suffix='',
 
         cols= st.columns([1, 1])
         stat = cols[0].selectbox("which statistic",
-                                ['t', 'beta', 'model_r2'] + list(pure_unit_color_mapping.keys()), 
+                                ['t', 'beta', 'model_r2', 'model_bic'] + list(pure_unit_color_mapping.keys()), 
                                 0,
                                 key=f'stat{suffix}')  # Could be model level stats, like 'model_r2'
         available_paras_this_model = [p for p in uplf.para_name_mapper if p in 
@@ -451,7 +451,8 @@ def select_para_of_interest(prompt="Map what to CCF?", suffix='',
     elif type_to_map == 'unit stats':
         column_to_map = st.selectbox("which stat", 
                                     st.session_state.ccf_stat_names, 
-                                    index=st.session_state.ccf_stat_names.index('avg_firing_rate'))
+                                    index=st.session_state.ccf_stat_names.index('avg_firing_rate'),
+                                    key=f'stat{suffix}')
         column_to_map_name = column_to_map
         if_map_pure = False
     
