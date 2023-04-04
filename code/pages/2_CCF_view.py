@@ -198,7 +198,8 @@ def draw_ccf_units(fig, x, y, z, aoi, uid, annot):
                                                 '<extra></extra>',
                                 text=annot,
                                 customdata=np.stack((aoi, z, uid), axis=-1),
-                                showlegend=False
+                                showlegend=False,
+                                unselected=dict(marker_color='lightgrey'),
                                 ))
     else:  # Negative: red (for unit_stats: ipsi), positive: blue (for unit_stats: contra)
         for select_z, col in zip((z < 0, z >= 0), ('rgba(255, 0, 0, 0.8)', 'rgba(0, 0, 255, 0.8)')):
@@ -215,20 +216,21 @@ def draw_ccf_units(fig, x, y, z, aoi, uid, annot):
                                                     '<extra></extra>',
                                     text=annot[select_z],
                                     customdata=np.stack((aoi[select_z], z[select_z], uid[select_z]), axis=-1),
-                                    showlegend=False
+                                    showlegend=False,
+                                    unselected=dict(marker_color='lightgrey'),
                                     ))
         
     return
 
 
 # @st.cache_data(ttl=24*3600, experimental_allow_widgets=True, show_spinner=True)
-def plot_coronal_slice_unit(ccf_x, coronal_slice_thickness, if_flip, *args):
+def plot_coronal_slice_unit(ccf_x, coronal_slice_thickness, *args):
     fig = go.Figure()
 
     # -- ccf annotation --
     coronal_slice, coronal_slice_name, coronal_edges = get_slice('coronal', ccf_x)
     
-    if if_flip:
+    if st.session_state.if_flip:
         max_x = int(np.ceil(5700 / CCF_RESOLUTION))
         coronal_slice = coronal_slice[:, :max_x, :]
         coronal_slice_name = coronal_slice_name[:, :max_x, :]
@@ -252,7 +254,7 @@ def plot_coronal_slice_unit(ccf_x, coronal_slice_thickness, if_flip, *args):
         if if_take_abs:
             z = np.abs(z)
 
-        if if_flip:
+        if st.session_state.if_flip:
             x[x > 5700] = 5700 * 2 - x[x > 5700]
             
         if if_ccf_plot_heatmap:
@@ -270,16 +272,17 @@ def plot_coronal_slice_unit(ccf_x, coronal_slice_thickness, if_flip, *args):
             except:
                 pass
         
-    fig.update_layout(width=800 if if_flip else 1000, 
+    fig.update_layout(width=800 if st.session_state.if_flip else 1100, 
                       height= 1000,
-                      xaxis_range=[0, 5700 if if_flip else 5700*2],
+                      xaxis_range=[0, 5700 if st.session_state.if_flip else 5700*2],
                       yaxis_range=[8000, -10],
                       xaxis_title='ccf_z (left -> right)',
                       yaxis_title='ccf_y (superior -> inferior)',
                       font=dict(size=20),
                       hovermode='closest',
-                      title=f'{heatmap_aggr_name} of {column_to_map_name}' + 
-                            (f'[{uplf.period_name_mapper[column_to_map[0]]}]' if isinstance(column_to_map, tuple) else ''),
+                      dragmode='zoom',
+                      title=f'{heatmap_aggr_name} of {column_to_map_name}' if heatmap_aggr_name is not None else column_to_map_name + 
+                            (f' [{uplf.period_name_mapper[column_to_map[0]]}]' if isinstance(column_to_map, tuple) else ''),
                       title_font_size=20,
                       )
     
@@ -289,7 +292,7 @@ def plot_coronal_slice_unit(ccf_x, coronal_slice_thickness, if_flip, *args):
 
 
 # @st.cache_data(ttl=24*3600, experimental_allow_widgets=True, show_spinner=True)
-def plot_saggital_slice_unit(ccf_z, saggital_slice_thickness, if_flip, *args):
+def plot_saggital_slice_unit(ccf_z, saggital_slice_thickness, *args):
     fig = go.Figure()
 
     # -- ccf annotation --
@@ -304,7 +307,7 @@ def plot_saggital_slice_unit(ccf_z, saggital_slice_thickness, if_flip, *args):
     # -- overlayed units --
     if len(st.session_state.df_unit_filtered_merged):
         st.session_state.df_unit_filtered_merged['ccf_z_in_slice_plot'] = st.session_state.df_unit_filtered_merged['ccf_z']
-        if if_flip:
+        if st.session_state.if_flip:
             to_flip_idx = st.session_state.df_unit_filtered_merged['ccf_z_in_slice_plot'] > 5700
             to_flip_value = st.session_state.df_unit_filtered_merged['ccf_z_in_slice_plot'][to_flip_idx]
             st.session_state.df_unit_filtered_merged.loc[to_flip_idx, 'ccf_z_in_slice_plot'] = 2 * 5700 - to_flip_value
@@ -330,7 +333,7 @@ def plot_saggital_slice_unit(ccf_z, saggital_slice_thickness, if_flip, *args):
             
             draw_ccf_units(fig, x, y, z, aoi, uid, annot)
     
-    fig.update_layout(width=1300, 
+    fig.update_layout(width=1300 if st.session_state.if_flip else 1000, 
                       height=1000,
                       xaxis_range=[0, 10000],
                       yaxis_range=[8000, -10],
@@ -338,9 +341,10 @@ def plot_saggital_slice_unit(ccf_z, saggital_slice_thickness, if_flip, *args):
                       yaxis_title='ccf_y (superior -> inferior)',
                       font=dict(size=20),
                       hovermode='closest',
-                      title=f'{heatmap_aggr_name} of {column_to_map_name}' + 
+                      title=f'{heatmap_aggr_name} of {column_to_map_name}' if heatmap_aggr_name is not None else column_to_map_name + 
                             (f'[{uplf.period_name_mapper[column_to_map[0]]}]' if isinstance(column_to_map, tuple) else ''),
                       title_font_size=20,
+                      dragmode='zoom',
                       )
     
     fig.add_vline(x=ccf_x, line_width=1)
@@ -508,7 +512,9 @@ if __name__ == '__main__':
             
             with st.expander('Heatmap', expanded=True):
                 if_ccf_plot_heatmap = st.checkbox("Draw heatmap", value=True)
-                if if_ccf_plot_heatmap:
+                if not if_ccf_plot_heatmap:
+                    heatmap_aggr_name = None
+                else:
                     with st.expander("Heatmap settings", expanded=True):
                         if column_to_map != 'number_units':
                             available_aggr_funcs  = _ccf_heatmap_available_aggr_funcs(column_to_map)
@@ -530,25 +536,27 @@ if __name__ == '__main__':
                         heatmap_bin_size = st.slider("Heatmap bin size", 25, 500, step=25, value=100)
                         heatmap_smooth = st.slider("Heatmap smooth factor", 0.0, 2.0, step=0.1, value=1.0)
                 
-            if_flip = st.checkbox("Flip to left hemisphere", value=True)        
+            st.session_state.if_flip = st.checkbox("Flip to left hemisphere", value=True)        
 
 
 
     # --- coronal slice ---
-    col_coronal, col_saggital = st.columns((1, 1.8))
+    col_coronal, col_saggital = st.columns((1, 1.8)) if st.session_state.if_flip else st.columns((1, 1))
     with col_coronal:
-        ccf_z = st.slider("Saggital slice at (ccf_z)", min_value=600, max_value=5700 if if_flip else 10800, 
+        col = st.columns([0.18 if st.session_state.if_flip else 0.085, 1, 0.04 if st.session_state.if_flip else 0.05])[1]
+        ccf_z = col.slider("Saggital slice at (ccf_z)", min_value=0, max_value=5700 if st.session_state.if_flip else 10800, 
                                         value=st.session_state.ccf_z if 'ccf_z' in st.session_state else 5100, 
                                         step=100)       # whole ccf @ 25um [528x320x456] 
-        saggital_thickness = st.slider("Slice thickness (LR)", min_value= 100, max_value=5000, step=50, value=700)
+        saggital_thickness = col.slider("Slice thickness (LR)", min_value= 100, max_value=5000, step=50, value=700)
         
         container_coronal = st.container()
         
     # --- saggital slice ---
     with col_saggital:
-        ccf_x = st.slider("Coronal slice at (ccf_x)", min_value=0, max_value=13100, value=3500, step=100) # whole ccf @ 25um [528x320x456] 
+        col = st.columns([0.13 if st.session_state.if_flip else 0.09, 1, 0.15 if st.session_state.if_flip else 0.11])[1]
+        ccf_x = col.slider("Coronal slice at (ccf_x)", min_value=0, max_value=10000, value=3500, step=100) # whole ccf @ 25um [528x320x456] 
         # st.markdown(f'##### AP relative to Bregma ~ {ccf_x_to_AP(ccf_x): .2f} mm') 
-        coronal_thickness = st.slider("Slice thickness (AP)", min_value= 100, max_value=5000, step=50, value=700)
+        coronal_thickness = col.slider("Slice thickness (AP)", min_value= 100, max_value=5000, step=50, value=700)
         
         container_saggital = st.container()
 
@@ -556,18 +564,18 @@ if __name__ == '__main__':
 
 
     with container_coronal:
-        fig = plot_coronal_slice_unit(ccf_x, coronal_thickness, if_flip) #, [size_to_map, size_gamma, size_range], aggrid_outputs, ccf_z, saggital_thickness)
+        fig = plot_coronal_slice_unit(ccf_x, coronal_thickness) #, [size_to_map, size_gamma, size_range], aggrid_outputs, ccf_z, saggital_thickness)
         fig.add_vline(x=ccf_z, line_width=1)
         fig.add_vline(x=max(ccf_z - saggital_thickness/2, fig.layout.xaxis.range[0]), line_width=1, line_dash='dash')
         fig.add_vline(x=min(ccf_z + saggital_thickness/2, fig.layout.xaxis.range[1]), line_width=1, line_dash='dash')
 
-        selected_points_slice = plotly_events(fig, click_event=False, hover_event=False, select_event=False,
-                                            override_height=1500)
+        selected_points_slice = plotly_events(fig, click_event=True, hover_event=False, select_event=True,
+                                              override_height=1500)
         # st.write(selected_points_slice)
         # st.plotly_chart(fig, use_container_width=True)
 
     with container_saggital:
-        fig = plot_saggital_slice_unit(ccf_z, saggital_thickness, if_flip) #, [size_to_map, size_gamma, size_range], aggrid_outputs, ccf_x, coronal_thickness)
+        fig = plot_saggital_slice_unit(ccf_z, saggital_thickness) #, [size_to_map, size_gamma, size_range], aggrid_outputs, ccf_x, coronal_thickness)
         selected_points_slice = plotly_events(fig, click_event=False, hover_event=False, select_event=False,
                                                 override_height=1500)
         # st.plotly_chart(fig, use_container_width=True)
