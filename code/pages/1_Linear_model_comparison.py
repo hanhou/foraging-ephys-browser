@@ -12,11 +12,6 @@ import extra_streamlit_components as stx
 from streamlit_util import add_unit_filter
 from Home import init, _to_theta_r, select_t_sign_level, t_to_p, p_to_t, pure_unit_color_mapping, polar_classifiers
 
-if 'df' not in st.session_state: 
-    init()
-    
-with st.sidebar:    
-    add_unit_filter()
     
 # Prepare df
 df_period_linear_fit_all = st.session_state.df['df_period_linear_fit_all']
@@ -433,6 +428,12 @@ def select_para(multi=True,
 
 
 if __name__ == '__main__':
+
+    if 'df' not in st.session_state: 
+        init()
+    
+    with st.sidebar:    
+        add_unit_filter()
 
     # --- Model comparison ---
     st.markdown('### Select a tab here 👇')

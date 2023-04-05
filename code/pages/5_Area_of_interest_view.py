@@ -9,9 +9,6 @@ import importlib
 xy_view = importlib.import_module('.3_X-Y_view', package='pages')
 
 
-if 'df' not in st.session_state: 
-    init()
-
 pure_unit_color_mapping =  {'pure_dQ': 'darkviolet',
                             'pure_sumQ': 'deepskyblue',
                             'pure_contraQ': 'darkblue',
@@ -170,4 +167,7 @@ def app():
     #     st.experimental_rerun()
         
 if __name__ == '__main__':
+    if 'df' not in st.session_state: 
+        init()
+
     app()

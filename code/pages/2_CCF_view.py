@@ -17,9 +17,6 @@ uplf = importlib.import_module('.1_Linear_model_comparison', package='pages')
 
 import nrrd
 
-
-if 'df' not in st.session_state: 
-    init()
     
 CCF_RESOLUTION = 25
 
@@ -89,7 +86,8 @@ def draw_ccf_annotations(fig, slice, slice_name, edges, message):
     xx, yy = edges
     fig.add_trace(go.Scattergl(x=yy * CCF_RESOLUTION, y=xx * CCF_RESOLUTION, 
                              mode='markers',
-                             marker={'color': 'rgba(0, 0, 0, 0.3)', 'size': 2},
+                             marker={'color': f'rgba(0, 0, 0, {st.session_state.ccf_border_alpha})', 
+                                     'size': st.session_state.ccf_border_width},
                              hoverinfo='skip',
                              showlegend=False,
                              ))
@@ -473,12 +471,13 @@ def select_para_of_interest(prompt="Map what to CCF?", suffix='',
                 column_selected=column_selected)
 
 if __name__ == '__main__':
+    
+    if 'df' not in st.session_state: 
+        init()
+
 
     with st.sidebar:    
-        try:
-            add_unit_filter()
-        except:
-            st.experimental_rerun()
+        add_unit_filter()
 
         with st.expander("CCF view settings", expanded=True):
             
@@ -536,7 +535,10 @@ if __name__ == '__main__':
                         heatmap_bin_size = st.slider("Heatmap bin size", 25, 500, step=25, value=100)
                         heatmap_smooth = st.slider("Heatmap smooth factor", 0.0, 2.0, step=0.1, value=1.0)
                 
-            st.session_state.if_flip = st.checkbox("Flip to left hemisphere", value=True)        
+            st.session_state.if_flip = st.checkbox("Flip to left hemisphere", value=True)    
+            cols = st.columns((1, 1))
+            st.session_state.ccf_border_width = cols[0].slider("CCF border width", 1.0, 10.0, step=1.0, value=2.0)  
+            st.session_state.ccf_border_alpha = cols[1].slider("opacity", 0.0, 1.0, step=0.1, value=0.3)
 
 
 

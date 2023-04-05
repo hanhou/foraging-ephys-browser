@@ -23,9 +23,6 @@ cache_fig_drift_metrics_folder = 'aind-behavior-data/Han/ephys/report/unit_drift
 cache_fig_psth_folder = 'aind-behavior-data/Han/ephys/report/all_units/'
 fs = s3fs.S3FileSystem(anon=False)
 
-if 'df' not in st.session_state: 
-    init()
-
 user_color_mapping = px.colors.qualitative.Plotly  # If not ccf color, use this color mapping
 
 @st.cache_data(ttl=24*3600, show_spinner=False)
@@ -209,11 +206,12 @@ def unit_plot_settings(need_click=True):
 
 # --------------------------------
 if __name__ == '__main__':
+    
+    if 'df' not in st.session_state: 
+        init()
+
     with st.sidebar:
-        try:
-            add_unit_filter()
-        except:
-            st.experimental_rerun()
+        add_unit_filter()
         
         with st.expander('t-value threshold', expanded=True):
             select_t_sign_level()
