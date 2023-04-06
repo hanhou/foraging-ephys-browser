@@ -51,8 +51,8 @@ period_name_mapper = {'before_2': 'Before GO (2s)', 'delay': 'Delay (median 60 m
 
 para_name_mapper = {'relative_action_value_ic': 'dQ', 
                     'total_action_value': 'sumQ', 
-                    'contra_action_value': 'contraQ', 
                     'ipsi_action_value': 'ipsiQ',
+                    'contra_action_value': 'contraQ', 
                     'rpe': 'rpe',
                     'choice_ic': 'choice (this)', 
                     'choice_ic_next': 'choice (next)',
@@ -63,7 +63,7 @@ para_name_mapper = {'relative_action_value_ic': 'dQ',
 
 # For significant proportion
 sig_prop_vars = ['relative_action_value_ic', 'total_action_value', 
-                'contra_action_value', 'ipsi_action_value',
+                'ipsi_action_value', 'contra_action_value', 
                 'rpe',
                 'choice_ic', 'choice_ic_next', 'trial_normalized', 'firing_1_back']
 sig_prop_color_mapping = {var: color for var, color in zip(sig_prop_vars, 
@@ -243,9 +243,9 @@ def plot_unit_sig_prop_bar(aois, period, t_sign_level):
                                             ),
                                 ))
         
-    fig.add_hline(y=p_value * 100, 
+    fig.add_hline(y=p_value * 100,
                   line_color='black', line_dash='dash')
-    fig.add_hline(y=100,  # Divided by 4 types 
+    fig.add_hline(y=100,  
                   line_color='black', line_dash='dash')
 
     
@@ -316,7 +316,7 @@ def plot_unit_pure_sig_prop_bar(aois, period, t_sign_level, model='dQ, sumQ, rpe
                                 customdata=np.stack((err, ns), axis=-1),
                                 ))
         
-    fig.add_hline(y=p_value * 100,  # Divided by 4 types 
+    fig.add_hline(y=p_value * 100 / 4,  # Divided by 4 types 
                   line_color='black', line_dash='dash')
     fig.add_hline(y=100,  # Divided by 4 types 
                   line_color='black', line_dash='dash')
