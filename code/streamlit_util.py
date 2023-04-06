@@ -278,8 +278,9 @@ def add_unit_filter():
         
         n_units = len(st.session_state.df_unit_filtered)
         n_animal = len(st.session_state.df_unit_filtered['subject_id'].unique())
+        n_session = len(st.session_state.df_unit_filtered.groupby(['subject_id', 'session']))
         n_insertion = len(st.session_state.df_unit_filtered.groupby(['subject_id', 'session', 'insertion_number']))
-        st.markdown(f'#### {n_units} units, {n_animal} mice, {n_insertion} insertions')
+        st.markdown(f'#### {n_units} units, {n_animal} mice, {n_session} sessions, {n_insertion} insertions')
 
 def add_unit_selector():
     with st.expander(f'Unit selector', expanded=True):

@@ -526,7 +526,7 @@ if __name__ == '__main__':
                         if 'sign' in heatmap_aggr_name or if_map_pure: 
                             sign_level = select_t_sign_level(st)
 
-                        if_bi_directional_heatmap = (any(column_selected < 0) + any(column_selected > 0)) == 2 and r'%' not in heatmap_aggr_name 
+                        if_bi_directional_heatmap = (np.any(column_selected < 0) + np.any(column_selected > 0)) == 2 and r'%' not in heatmap_aggr_name 
                         heatmap_aggr_func, heatmap_color_ranges = _ccf_heatmap_get_aggr_func_and_range(heatmap_aggr_name, column_to_map, column_selected)
                         heatmap_color_range = st.slider(f"Heatmap color range", 
                                                         heatmap_color_ranges[0], heatmap_color_ranges[1],
