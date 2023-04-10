@@ -269,6 +269,17 @@ def filter_dataframe(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
+from datetime import datetime 
+
+import s3fs
+from PIL import Image, ImageColor
+
+cache_fig_drift_metrics_folder = 'aind-behavior-data/Han/ephys/report/unit_drift_metrics/'
+cache_fig_psth_folder = 'aind-behavior-data/Han/ephys/report/all_units/'
+fs = s3fs.S3FileSystem(anon=False)
+
+
+
 def add_unit_filter():
     with st.expander("Unit filter", expanded=True):   
         st.session_state.df_unit_filtered = filter_dataframe(df=st.session_state.df['df_ephys_units'])
@@ -278,9 +289,8 @@ def add_unit_filter():
         
         n_units = len(st.session_state.df_unit_filtered)
         n_animal = len(st.session_state.df_unit_filtered['subject_id'].unique())
-        n_session = len(st.session_state.df_unit_filtered.groupby(['subject_id', 'session']))
         n_insertion = len(st.session_state.df_unit_filtered.groupby(['subject_id', 'session', 'insertion_number']))
-        st.markdown(f'#### {n_units} units, {n_animal} mice, {n_session} sessions, {n_insertion} insertions')
+        st.markdown(f'#### {n_units} units, {n_animal} mice, {n_insertion} insertions')
 
 def add_unit_selector():
     with st.expander(f'Unit selector', expanded=True):
@@ -290,20 +300,103 @@ def add_unit_selector():
         with st.expander(f"Filtered: {n_units} units", expanded=False):
             st.dataframe(st.session_state.df_unit_filtered)
         
-        # cols = st.columns([4, 1])
-        # with cols[0].expander(f"From dataframe: {len(st.session_state.df_selected_from_dataframe)} sessions", expanded=False):
-        #     st.dataframe(st.session_state.df_selected_from_dataframe)
+        for i, source in enumerate(st.session_state.select_sources):
+            df_selected_this = st.session_state[f'df_selected_from_{source}']
+            cols = st.columns([4, 1])
+            with cols[0].expander(f"Selected: {len(df_selected_this)} units from {source}", expanded=False):
+                st.dataframe(df_selected_this)
+                
+            if cols[1].button('❌' + ' '*i):  # Avoid duplicat key
+                st.session_state[f'df_selected_from_{source}'] = pd.DataFrame(columns=[st.session_state.unit_key_names])
+                st.experimental_rerun()
         
-        # if cols[1].button('❌'):
-        #     st.session_state.df_selected_from_dataframe = pd.DataFrame()
-        #     st.experimental_rerun()
+
+def unit_plot_settings(default_source='xy_view', need_click=True):
+    
+    cols = st.columns([3, 1])
+    
+    st.session_state.unit_select_source = cols[0].selectbox('Which unit(s) to draw?', 
+                                            [f'selected from {source} '
+                                             f'({len(st.session_state[f"df_selected_from_{source}"])} units)' 
+                                             for source in st.session_state.select_sources], 
+                                            index=st.session_state.select_sources.index(default_source)
+                                            )
         
-        cols = st.columns([4, 1])
-        with cols[0].expander(f"Selected: {len(st.session_state.df_selected_from_xy_view)} units", expanded=False):
-            st.dataframe(st.session_state.df_selected_from_xy_view)
+    # cols[0].markdown(f'##### Show selected {len(df_selected)} unit(s)')
+    st.session_state.num_cols = cols[1].number_input('Number of columns', 1, 10, 
+                                                     st.session_state.num_cols if 'num_cols' in st.session_state else 3)
+
+    st.session_state.draw_types = st.multiselect('Which plot(s) to draw?', ['psth', 'drift metrics'], 
+                                                 default=st.session_state.draw_types if 'draw_types' in st.session_state else ['psth'])
+    
+    if need_click:
+        cols = st.columns([1, 3])
+        auto_draw = cols[0].checkbox('Auto draw', value=False)
+        draw_it = cols[1].button(f'================ 🎨 Draw! ================', use_container_width=True)
+    else:
+        draw_it = True
+    return draw_it or auto_draw
+
+
+
+@st.cache_data(max_entries=100)
+def get_fig_unit_psth_only(key):
+    fn = f'*{key["h2o"]}_{key["session_date"]}_{key["insertion_number"]}*u{key["unit"]:03}*'
+    aoi = key["area_of_interest"]
+    
+    file = fs.glob(cache_fig_psth_folder + ('' if aoi == 'others' else aoi + '/') + fn)
+    if len(file) == 1:
+        with fs.open(file[0]) as f:
+            img = Image.open(f)
+            img = img.crop((500, 140, 3000, 2800)) 
+    else:
+        img = None
             
-        if cols[1].button('❌ '):
-            st.session_state.df_selected_from_xy_view = pd.DataFrame(columns=[st.session_state.unit_key_names])
-            # st.session_state.df_selected_from_dataframe = pd.DataFrame(columns=['h2o', 'session'])
-            st.experimental_rerun()
+    return img
+
+@st.cache_data(max_entries=100)
+def get_fig_unit_drift_metric(key):
+    fn = f'*{key["subject_id"]}_{key["session"]}_{key["insertion_number"]}_{key["unit"]:03}*'
+    
+    file = fs.glob(cache_fig_drift_metrics_folder + fn)
+    if len(file) == 1:
+        with fs.open(file[0]) as f:
+            img = Image.open(f)
+            img = img.crop((0, 0, img.size[0], img.size[1]))  
+    else:
+        img = None
+            
+    return img
+
+draw_func_mapping = {'psth': get_fig_unit_psth_only,
+                     'drift metrics': get_fig_unit_drift_metric}
+
+
+def draw_selected_units():    
+    
+    for source in st.session_state.select_sources:
+        if source in st.session_state.unit_select_source: break
         
+    df_selected = st.session_state[f'df_selected_from_{source}']
+    
+    st.write(f'Loading selected {len(df_selected)} units...')
+    my_bar = st.columns((1, 7))[0].progress(0)
+
+    cols = st.columns([1]*st.session_state.num_cols)
+    
+    for i, key in enumerate(df_selected.reset_index().to_dict(orient='records')):
+        key['session_date'] = datetime.strftime(datetime.strptime(str(key['session_date']), '%Y-%m-%d %H:%M:%S'), '%Y%m%d')
+        col = cols[i%st.session_state.num_cols]
+        col.markdown(f'''<h5 style='text-align: center; color: orange;'>{key["h2o"]}, ''' 
+            f'''Session {key["session"]}, {key['session_date']}, unit {key["unit"]} ({key["area_of_interest"]})</h3>''',
+            unsafe_allow_html=True)
+
+        for draw_type in st.session_state.draw_types:
+            img = draw_func_mapping[draw_type](key)
+            if img is None:
+                col.markdown(f'{draw_type} fetch error')
+            else:
+                col.image(img, output_format='PNG', use_column_width=True)
+        
+        col.markdown("---")
+        my_bar.progress(int((i + 1) / len(df_selected) * 100))

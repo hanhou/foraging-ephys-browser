@@ -86,16 +86,14 @@ pure_unit_color_mapping =  {'pure_dQ': 'darkviolet',
 polar_classifiers = {'dQ, sumQ, rpe': [{'x_name': 'relative_action_value_ic', 'y_name': 'total_action_value'},
                                         {'pure_dQ': [(-22.5, 22.5), (-22.5 + 180, 180), (-180, -180 + 22.5)],
                                         'pure_sumQ': [(22.5 + 45, 67.5 + 45), (22.5 + 45 - 180, 67.5 + 45 - 180)],
-                                        'pure_ipsiQ': [(22.5 + 90, 67.5 + 90), (22.5 + 90 - 180, 67.5 + 90 - 180)],
-                                        'pure_contraQ': [(22.5, 67.5), (22.5 - 180, 67.5 - 180)]},
-                                        ],
+                                        'pure_contraQ': [(22.5, 67.5), (22.5 - 180, 67.5 - 180)],
+                                        'pure_ipsiQ': [(22.5 + 90, 67.5 + 90), (22.5 + 90 - 180, 67.5 + 90 - 180)]}],
                         
                      'contraQ, ipsiQ, rpe':  [{'x_name': 'ipsi_action_value', 'y_name': 'contra_action_value'},
                                             {'pure_dQ': [(22.5 + 90, 67.5 + 90), (22.5 + 90 - 180, 67.5 + 90 - 180)],
                                             'pure_sumQ': [(22.5, 67.5), (22.5 - 180, 67.5 - 180)],
-                                            'pure_ipsiQ': [(-22.5, 22.5), (-22.5 + 180, 180), (-180, -180 + 22.5)],
                                             'pure_contraQ': [(22.5 + 45, 67.5 + 45), (22.5 + 45 - 180, 67.5 + 45 - 180)],
-                                            }]
+                                            'pure_ipsiQ': [(-22.5, 22.5), (-22.5 + 180, 180), (-180, -180 + 22.5)],}]
 }
 
 def _to_theta_r(x, y):
@@ -144,13 +142,20 @@ def init():
                     })
 
     df = load_data(['sessions', 'df_ephys_units', 'aoi', 'df_period_linear_fit_all'])
+    st.session_state.unit_key_names = ['uid', 'subject_id', 'session', 'insertion_number', 'unit', 'session_date', 'h2o']
+
     st.session_state.df = df
-    st.session_state.df_selected_from_xy_view = pd.DataFrame(columns=['h2o', 'session'])
+    
+    # Add jitter to depth
+    st.session_state.df['df_ephys_units']['ccf_y'] += np.round(np.random.random(st.session_state.df['df_ephys_units']['ccf_y'].shape) * 30, 5)
+    
+    # Initialize session select state
+    st.session_state.select_sources = ['ccf_coronal', 'ccf_saggital', 'xy_view']
+    st.session_state.df_selected_from_xy_view = pd.DataFrame(columns=[st.session_state.unit_key_names])
+    st.session_state.df_selected_from_ccf_coronal = st.session_state.df_selected_from_xy_view.copy()
+    st.session_state.df_selected_from_ccf_saggital = st.session_state.df_selected_from_xy_view.copy()
     
     # Type converting
-    
-    
-    st.session_state.unit_key_names = ['uid', 'subject_id', 'session', 'insertion_number', 'unit', 'session_date', 'h2o']
 
     st.session_state.aoi_color_mapping = {area: f'rgb({",".join(col.astype(str))})' for area, col in zip(df['aoi'].index, df['aoi'].rgb)}
     # Some global variables

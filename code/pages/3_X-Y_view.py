@@ -4,10 +4,9 @@ import plotly.graph_objects as go
 import numpy as np
 import pandas as pd
 
-from streamlit_util import filter_dataframe, aggrid_interactive_table_units, add_unit_selector, add_unit_filter
+from streamlit_util import (filter_dataframe, aggrid_interactive_table_units, add_unit_selector, 
+                            add_unit_filter, unit_plot_settings, draw_selected_units)
 from streamlit_plotly_events import plotly_events
-
-from datetime import datetime 
 
 import importlib
 ccf_view = importlib.import_module('.2_CCF_view', package='pages')
@@ -22,6 +21,9 @@ from Home import init, select_t_sign_level
 cache_fig_drift_metrics_folder = 'aind-behavior-data/Han/ephys/report/unit_drift_metrics/'
 cache_fig_psth_folder = 'aind-behavior-data/Han/ephys/report/all_units/'
 fs = s3fs.S3FileSystem(anon=False)
+
+if 'df' not in st.session_state: 
+    init()
 
 user_color_mapping = px.colors.qualitative.Plotly  # If not ccf color, use this color mapping
 
@@ -104,61 +106,6 @@ def plot_scatter(data, size=10, opacity=0.5, equal_axis=False, show_diag=False, 
             
     return fig
 
-@st.cache_data(max_entries=100)
-def get_fig_unit_psth_only(key):
-    fn = f'*{key["h2o"]}_{key["session_date"]}_{key["insertion_number"]}*u{key["unit"]:03}*'
-    aoi = key["area_of_interest"]
-    
-    file = fs.glob(cache_fig_psth_folder + ('' if aoi == 'others' else aoi + '/') + fn)
-    if len(file) == 1:
-        with fs.open(file[0]) as f:
-            img = Image.open(f)
-            img = img.crop((500, 140, 3000, 2800)) 
-    else:
-        img = None
-            
-    return img
-
-@st.cache_data(max_entries=100)
-def get_fig_unit_drift_metric(key):
-    fn = f'*{key["subject_id"]}_{key["session"]}_{key["insertion_number"]}_{key["unit"]:03}*'
-    
-    file = fs.glob(cache_fig_drift_metrics_folder + fn)
-    if len(file) == 1:
-        with fs.open(file[0]) as f:
-            img = Image.open(f)
-            img = img.crop((0, 0, img.size[0], img.size[1]))  
-    else:
-        img = None
-            
-    return img
-
-draw_func_mapping = {'psth': get_fig_unit_psth_only,
-                     'drift metrics': get_fig_unit_drift_metric}
-
-def draw_selected_units(df_selected, draw_types, num_col):
-    
-    st.write(f'Loading selected {len(df_selected)} units...')
-    my_bar = st.columns((1, 7))[0].progress(0)
-
-    cols = st.columns([1]*num_col)
-    
-    for i, key in enumerate(df_selected.reset_index().to_dict(orient='records')):
-        key['session_date'] = datetime.strftime(datetime.strptime(str(key['session_date']), '%Y-%m-%d %H:%M:%S'), '%Y%m%d')
-        col = cols[i%num_col]
-        col.markdown(f'''<h5 style='text-align: center; color: orange;'>{key["h2o"]}, ''' 
-            f'''Session {key["session"]}, {key['session_date']}, unit {key["unit"]} ({key["area_of_interest"]})</h3>''',
-            unsafe_allow_html=True)
-
-        for draw_type in draw_types:
-            img = draw_func_mapping[draw_type](key)
-            if img is None:
-                col.markdown(f'{draw_type} fetch error')
-            else:
-                col.image(img, output_format='PNG', use_column_width=True)
-        
-        col.markdown("---")
-        my_bar.progress(int((i + 1) / len(df_selected) * 100))
 
 
 def add_xy_selector():
@@ -183,35 +130,14 @@ def add_xy_selector():
     return xy_selected
 
 
-def unit_plot_settings(need_click=True):
-    
-    cols = st.columns([3, 1])
-    cols[0].markdown('##### Show plots for selected units from the XY view')
-    if cols[1].button('❌  clear selection', use_container_width=True):
-        st.session_state.df_selected_from_xy_view = pd.DataFrame(columns=[st.session_state.unit_key_names])
-        st.experimental_rerun()
-
-    cols = st.columns([3, 1])
-    st.session_state.draw_types = cols[0].multiselect('Which plot(s) to draw?', ['psth', 'drift metrics'], default=['psth'])
-    st.session_state.num_cols = cols[1].number_input('Number of columns', 1, 10, 3)
-    
-    if need_click:
-        cols = st.columns([1, 3])
-        auto_draw = cols[0].checkbox('Auto draw', value=False)
-        draw_it = cols[1].button(f'Show me all {len(st.session_state.df_selected_from_xy_view)} units!', use_container_width=True)
-    else:
-        draw_it = True
-    return draw_it or auto_draw
-
 
 # --------------------------------
 if __name__ == '__main__':
-    
-    if 'df' not in st.session_state: 
-        init()
-
     with st.sidebar:
-        add_unit_filter()
+        try:
+            add_unit_filter()
+        except:
+            st.experimental_rerun()
         
         with st.expander('t-value threshold', expanded=True):
             select_t_sign_level()
@@ -263,4 +189,4 @@ if __name__ == '__main__':
                 st.experimental_rerun()
         
             if if_draw_units:
-                draw_selected_units(df_selected_from_xy_view, st.session_state.draw_types, st.session_state.num_cols)
+                draw_selected_units()
