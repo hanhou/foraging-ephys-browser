@@ -14,7 +14,9 @@ from PIL import Image, ImageColor
 import streamlit.components.v1 as components
 import streamlit_nested_layout
 
-from util.streamlit_util import filter_dataframe, aggrid_interactive_table_units, add_unit_filter, add_unit_selector
+from util import *
+from util.streamlit_util import aggrid_interactive_table_units
+from util.selectors import add_unit_filter
 
 
 if_profile = False
@@ -40,7 +42,7 @@ else:
     fs = s3fs.S3FileSystem(anon=False)
     use_s3 = True
 
-    
+   
 @st.cache_data(ttl=24*3600)
 def load_data(tables=['sessions']):
     df = {}
@@ -75,26 +77,6 @@ def get_fig_unit_all_in_one(key):
             
     return img
  
-
-
-# For pure units
-pure_unit_color_mapping =  {'pure_dQ': 'darkviolet',
-                            'pure_sumQ': 'deepskyblue',
-                            'pure_contraQ': 'darkblue',
-                            'pure_ipsiQ': 'darkorange'}
-                                
-polar_classifiers = {'dQ, sumQ, rpe': [{'x_name': 'relative_action_value_ic', 'y_name': 'total_action_value'},
-                                        {'pure_dQ': [(-22.5, 22.5), (-22.5 + 180, 180), (-180, -180 + 22.5)],
-                                        'pure_sumQ': [(22.5 + 45, 67.5 + 45), (22.5 + 45 - 180, 67.5 + 45 - 180)],
-                                        'pure_contraQ': [(22.5, 67.5), (22.5 - 180, 67.5 - 180)],
-                                        'pure_ipsiQ': [(22.5 + 90, 67.5 + 90), (22.5 + 90 - 180, 67.5 + 90 - 180)]}],
-                        
-                     'contraQ, ipsiQ, rpe':  [{'x_name': 'ipsi_action_value', 'y_name': 'contra_action_value'},
-                                            {'pure_dQ': [(22.5 + 90, 67.5 + 90), (22.5 + 90 - 180, 67.5 + 90 - 180)],
-                                            'pure_sumQ': [(22.5, 67.5), (22.5 - 180, 67.5 - 180)],
-                                            'pure_contraQ': [(22.5 + 45, 67.5 + 45), (22.5 + 45 - 180, 67.5 + 45 - 180)],
-                                            'pure_ipsiQ': [(-22.5, 22.5), (-22.5 + 180, 180), (-180, -180 + 22.5)],}]
-}
 
 def _to_theta_r(x, y):
     return np.rad2deg(np.arctan2(y, x)), np.sqrt(x**2 + y**2)

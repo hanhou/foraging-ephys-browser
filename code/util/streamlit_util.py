@@ -1,6 +1,8 @@
 from email import header
 import pandas as pd
 import streamlit as st
+ss = st.session_state
+
 from st_aggrid import AgGrid, GridOptionsBuilder
 from st_aggrid.shared import GridUpdateMode, ColumnsAutoSizeMode, DataReturnMode
 from pandas.api.types import (
@@ -111,11 +113,11 @@ def aggrid_interactive_table_units(df: pd.DataFrame, height=500):
     return selection
 
 def cache_widget(field, clear=None):
-    st.session_state[f'{field}_cache'] = st.session_state[field]
+    ss[f'{field}_cache'] = ss[field]
     
     # Clear cache if needed
     if clear:
-        if clear in st.session_state: del st.session_state[clear]
+        if clear in ss: del ss[clear]
         
 # def dec_cache_widget_state(widget, ):
 
@@ -155,8 +157,8 @@ def filter_dataframe(df: pd.DataFrame) -> pd.DataFrame:
         st.markdown(f"Add filters")
         to_filter_columns = st.multiselect("Filter dataframe on", df.columns,
                                                             label_visibility='collapsed',
-                                                            default=st.session_state.to_filter_columns_cache 
-                                                                    if 'to_filter_columns_cache' in st.session_state
+                                                            default=ss.to_filter_columns_cache 
+                                                                    if 'to_filter_columns_cache' in ss
                                                                     else ['area_of_interest'],
                                                             key='to_filter_columns',
                                                             on_change=cache_widget,
@@ -170,8 +172,8 @@ def filter_dataframe(df: pd.DataFrame) -> pd.DataFrame:
                     f"Values for {column}",
                     df[column].unique(),
                     label_visibility='collapsed',
-                    default=st.session_state[f'select_{column}_cache']
-                            if f'select_{column}_cache' in st.session_state
+                    default=ss[f'select_{column}_cache']
+                            if f'select_{column}_cache' in ss
                             else list(df[column].unique()),
                     key=f'select_{column}',
                     on_change=cache_widget,
@@ -195,8 +197,8 @@ def filter_dataframe(df: pd.DataFrame) -> pd.DataFrame:
                     col1.markdown(f"Filter for **{column}**")
                     if float(df[column].min()) >= 0: 
                         show_log = col2.checkbox('log 10', 
-                                                 value=st.session_state[f'if_log_{column}_cache']
-                                                       if f'if_log_{column}_cache' in st.session_state
+                                                 value=ss[f'if_log_{column}_cache']
+                                                       if f'if_log_{column}_cache' in ss
                                                        else False,
                                                  key=f'if_log_{column}',
                                                  on_change=cache_widget,
@@ -222,8 +224,8 @@ def filter_dataframe(df: pd.DataFrame) -> pd.DataFrame:
                         label_visibility='collapsed',
                         min_value=_min,
                         max_value=_max,
-                        value= st.session_state[f'select_{column}_cache']
-                                if f'select_{column}_cache' in st.session_state
+                        value= ss[f'select_{column}_cache']
+                                if f'select_{column}_cache' in ss
                                 else (_min, _max),
                         step=step,
                         key=f'select_{column}',
@@ -267,146 +269,3 @@ def filter_dataframe(df: pd.DataFrame) -> pd.DataFrame:
                     df = df[df[column].astype(str).str.contains(user_text_input)]
 
     return df
-
-
-from datetime import datetime 
-
-import s3fs
-from PIL import Image, ImageColor
-
-cache_fig_drift_metrics_folder = 'aind-behavior-data/Han/ephys/report/unit_drift_metrics/'
-cache_fig_psth_folder = 'aind-behavior-data/Han/ephys/report/all_units/'
-fs = s3fs.S3FileSystem(anon=False)
-
-
-
-def add_unit_filter():
-    with st.expander("Unit filter", expanded=True):   
-        st.session_state.df_unit_filtered = filter_dataframe(df=st.session_state.df['df_ephys_units'])
-        # Join with df_period_linear_fit_all here! (A huge dataframe with all things merged (flattened multi-level columns)
-        st.session_state.df_unit_filtered_merged = st.session_state.df_unit_filtered.set_index(st.session_state.unit_key_names + ['area_of_interest']
-                                                                                        ).join(st.session_state.df['df_period_linear_fit_all'], how='inner')
-        
-        n_units = len(st.session_state.df_unit_filtered)
-        n_animal = len(st.session_state.df_unit_filtered['subject_id'].unique())
-        n_insertion = len(st.session_state.df_unit_filtered.groupby(['subject_id', 'session', 'insertion_number']))
-        st.markdown(f'#### {n_units} units, {n_animal} mice, {n_insertion} insertions')
-
-def add_unit_selector():
-    with st.expander(f'Unit selector', expanded=True):
-        
-        n_units = len(st.session_state.df_unit_filtered)
-                        
-        with st.expander(f"Filtered: {n_units} units", expanded=False):
-            st.dataframe(st.session_state.df_unit_filtered)
-        
-        for i, source in enumerate(st.session_state.select_sources):
-            df_selected_this = st.session_state[f'df_selected_from_{source}']
-            cols = st.columns([4, 1])
-            with cols[0].expander(f"Selected: {len(df_selected_this)} units from {source}", expanded=False):
-                st.dataframe(df_selected_this)
-                
-            if cols[1].button('❌' + ' '*i):  # Avoid duplicat key
-                st.session_state[f'df_selected_from_{source}'] = pd.DataFrame(columns=[st.session_state.unit_key_names])
-                st.experimental_rerun()
-        
-        # Sync selected units across sources
-        cols = st.columns([4, 1])
-        sync_using = cols[0].selectbox('Sync all using', st.session_state.select_sources, index=0)
-        cols[1].write('\n\n')
-        if cols[1].button('🔄'):
-            for source in st.session_state.select_sources:
-                if source != sync_using:
-                    st.session_state[f'df_selected_from_{source}'] = st.session_state[f'df_selected_from_{sync_using}']
-            st.experimental_rerun()
-                
-
-def unit_plot_settings(default_source='xy_view', need_click=True):
-    
-    cols = st.columns([3, 1])
-    
-    st.session_state.unit_select_source = cols[0].selectbox('Which unit(s) to draw?', 
-                                            [f'selected from {source} '
-                                             f'({len(st.session_state[f"df_selected_from_{source}"])} units)' 
-                                             for source in st.session_state.select_sources], 
-                                            index=st.session_state.select_sources.index(default_source)
-                                            )
-        
-    # cols[0].markdown(f'##### Show selected {len(df_selected)} unit(s)')
-    st.session_state.num_cols = cols[1].number_input('Number of columns', 1, 10, 
-                                                     st.session_state.num_cols if 'num_cols' in st.session_state else 3)
-
-    st.session_state.draw_types = st.multiselect('Which plot(s) to draw?', ['psth', 'drift metrics'], 
-                                                 default=st.session_state.draw_types if 'draw_types' in st.session_state else ['psth'])
-    
-    if need_click:
-        cols = st.columns([1, 3])
-        auto_draw = cols[0].checkbox('Auto draw', value=False)
-        draw_it = cols[1].button(f'================ 🎨 Draw! ================', use_container_width=True)
-    else:
-        draw_it = True
-    return draw_it or auto_draw
-
-
-
-# @st.cache_data(max_entries=100)
-def get_fig_unit_psth_only(key):
-    fn = f'*{key["h2o"]}_{key["session_date"]}_{key["insertion_number"]}*u{key["unit"]:03}*'
-    aoi = key["area_of_interest"]
-    
-    file = fs.glob(cache_fig_psth_folder + ('' if aoi == 'others' else aoi + '/') + fn)
-    if len(file) == 1:
-        with fs.open(file[0]) as f:
-            img = Image.open(f)
-            img = img.crop((500, 140, 3000, 2800)) 
-    else:
-        img = None
-            
-    return img
-
-# @st.cache_data(max_entries=100)
-def get_fig_unit_drift_metric(key):
-    fn = f'*{key["subject_id"]}_{key["session"]}_{key["insertion_number"]}_{key["unit"]:03}*'
-    
-    file = fs.glob(cache_fig_drift_metrics_folder + fn)
-    if len(file) == 1:
-        with fs.open(file[0]) as f:
-            img = Image.open(f)
-            img = img.crop((0, 0, img.size[0], img.size[1]))  
-    else:
-        img = None
-            
-    return img
-
-draw_func_mapping = {'psth': get_fig_unit_psth_only,
-                     'drift metrics': get_fig_unit_drift_metric}
-
-
-def draw_selected_units():    
-    
-    for source in st.session_state.select_sources:
-        if source in st.session_state.unit_select_source: break
-        
-    df_selected = st.session_state[f'df_selected_from_{source}']
-    
-    st.write(f'Loading selected {len(df_selected)} units...')
-    my_bar = st.columns((1, 7))[0].progress(0)
-
-    cols = st.columns([1]*st.session_state.num_cols)
-    
-    for i, key in enumerate(df_selected.reset_index().to_dict(orient='records')):
-        key['session_date'] = datetime.strftime(datetime.strptime(str(key['session_date']), '%Y-%m-%d %H:%M:%S'), '%Y%m%d')
-        col = cols[i%st.session_state.num_cols]
-        col.markdown(f'''<h5 style='text-align: center; color: orange;'>{key["h2o"]}, ''' 
-            f'''Session {key["session"]}, {key['session_date']}, unit {key["unit"]} ({key["area_of_interest"]})</h3>''',
-            unsafe_allow_html=True)
-
-        for draw_type in st.session_state.draw_types:
-            img = draw_func_mapping[draw_type](key)
-            if img is None:
-                col.markdown(f'{draw_type} fetch error')
-            else:
-                col.image(img, output_format='PNG', use_column_width=True)
-        
-        col.markdown("---")
-        my_bar.progress(int((i + 1) / len(df_selected) * 100))

@@ -9,8 +9,9 @@ from plotly.subplots import make_subplots
 from streamlit_plotly_events import plotly_events
 import extra_streamlit_components as stx
 
-from util.streamlit_util import add_unit_filter
-from Home import init, _to_theta_r, select_t_sign_level, t_to_p, p_to_t, pure_unit_color_mapping, polar_classifiers
+from util import *
+from util.selectors import (add_unit_filter, select_period, select_model, select_para)
+from Home import init, _to_theta_r, select_t_sign_level, t_to_p, p_to_t
 
     
 # Prepare df
@@ -28,47 +29,6 @@ plotly_font = lambda x: dict(xaxis_tickfont_size=x,
                             yaxis_title_font_size=x,
                             legend_font_size=x,
                             legend_title_font_size=x,)
-
-all_models =  ['dQ, sumQ, rpe', 
-               'dQ, sumQ, rpe, C*2', 
-               'dQ, sumQ, rpe, C*2, t', 
-               'dQ, sumQ, rpe, C*2, R*1', 
-               'dQ, sumQ, rpe, C*2, R*1, t',
-               'dQ, sumQ, rpe, C*2, R*5, t',
-               'dQ, sumQ, rpe, C*2, R*10, t',
-               'contraQ, ipsiQ, rpe',
-               'contraQ, ipsiQ, rpe, C*2, R*5, t']
-
-model_name_mapper = {model:  ' + '.join([{'dQ': 'dQ', ' sumQ': 'sumQ', ' rpe': 'rpe', 'contraQ': 'contraQ', ' ipsiQ': 'ipsiQ',
-                                        ' C*2': 'choice', ' t': 'trial#', 
-                                        ' R*1': 'firing back 1', ' R*5': 'firing back 5', ' R*10': 'firing back 10'}[var] for var in model.split(',')])
-                    for model in all_models}
-
-model_color_mapper = {model:color for model, color in zip(all_models, px.colors.qualitative.Plotly)}
-
-period_name_mapper = {'before_2': 'Before GO (2s)', 'delay': 'Delay (median 60 ms)', 'go_1.2': 'After GO (1.2s)', 'go_to_end': 'GO to END', 
-                  'iti_all': 'ITI (all, median 3.95s)', 'iti_first_2': 'ITI (first 2s)', 'iti_last_2': 'ITI (last 2s)'}
-
-para_name_mapper = {'relative_action_value_ic': 'dQ', 
-                    'total_action_value': 'sumQ', 
-                    'ipsi_action_value': 'ipsiQ',
-                    'contra_action_value': 'contraQ', 
-                    'rpe': 'rpe',
-                    'choice_ic': 'choice (this)', 
-                    'choice_ic_next': 'choice (next)',
-                    'trial_normalized': 'trial number', 
-                    **{f'firing_{n}_back': f'firing {n} back' for n in range(1, 11)},
-                    }
-
-
-# For significant proportion
-sig_prop_vars = ['relative_action_value_ic', 'total_action_value', 
-                'ipsi_action_value', 'contra_action_value', 
-                'rpe',
-                'choice_ic', 'choice_ic_next', 'trial_normalized', 'firing_1_back']
-sig_prop_color_mapping = {var: color for var, color in zip(sig_prop_vars, 
-                                                           ['darkviolet', 'deepskyblue', 'darkblue', 'darkorange', 'gray'] + px.colors.qualitative.Plotly)}
-
 
 
 @st.cache_data(max_entries=100)
@@ -376,55 +336,6 @@ def plot_unit_class_scatter(period, model='dQ, sumQ, rpe'):
         figs.append(fig)
             
     return figs
-
-def select_period(multi=True, label='Periods to plot', 
-                  default_period='iti_all',
-                  col=st, suffix=''):
-    if multi:
-        period_names = col.multiselect(label, 
-                                   period_name_mapper.values(),
-                                   [period_name_mapper[p] for p in period_name_mapper if p!= 'delay'],
-                                   key=f'period_names{suffix}')
-        return period_names, [p for p in period_name_mapper if period_name_mapper[p] in period_names]
-    else:
-        period_name = col.selectbox(label, 
-                                    period_name_mapper.values(),
-                                    list(period_name_mapper.keys()).index(default_period),
-                                    key=f'period_name{suffix}')
-        return period_name, [p for p in period_name_mapper if period_name_mapper[p] == period_name][0]
-
-def select_model(available_models=list(model_name_mapper.keys()),
-                 default_model='dQ, sumQ, rpe, C*2, R*5, t',
-                label='Model to plot', 
-                suffix='',
-                col=st):
-    model_name = col.selectbox(label,
-                               [model_name_mapper[m] for m in available_models], 
-                                available_models.index(default_model),
-                                key=f'model_name{suffix}')
-    model = [m for m in model_name_mapper if model_name_mapper[m] == model_name][0]
-    return model_name, model
-
-def select_para(multi=True,
-                available_paras=list(para_name_mapper.keys()), 
-                default_paras='relative_action_value_ic', 
-                label='Variables to plot',
-                suffix='',
-                col=st):
-    if multi:
-        para_names = col.multiselect(label, 
-                                 [para_name_mapper[p] for p in available_paras],
-                                 [para_name_mapper[p] for p in default_paras],
-                                 key=f'para_names{suffix}'
-                                 )
-        return para_names, [p for p in para_name_mapper if para_name_mapper[p] in para_names]
-    else:
-        para_name = col.selectbox(label, 
-                                  [para_name_mapper[p] for p in available_paras],
-                                  available_paras.index(default_paras),
-                                  key=f'para_name{suffix}'
-                                  )
-        return para_name, [p for p in para_name_mapper if para_name_mapper[p] == para_name][0]
 
 
 if __name__ == '__main__':

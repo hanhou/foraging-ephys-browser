@@ -5,13 +5,12 @@ import plotly.graph_objects as go
 import numpy as np
 import pandas as pd
 
-from util.streamlit_util import (filter_dataframe, aggrid_interactive_table_units, add_unit_selector, 
-                            add_unit_filter, unit_plot_settings, draw_selected_units)
-from streamlit_plotly_events import plotly_events
+from util import *
+from util.streamlit_util import filter_dataframe, aggrid_interactive_table_units
+from util.selectors import add_unit_filter, add_unit_selector, select_para_of_interest
+from util.draw_units import draw_selected_units, unit_draw_settings
 
-import importlib
-ccf_view = importlib.import_module('.2_CCF_view', package='pages')
-uplf = importlib.import_module('.1_Linear_model_comparison', package='pages')
+from streamlit_plotly_events import plotly_events
 
 
 import s3fs
@@ -104,8 +103,8 @@ def plot_scatter(data, size=10, opacity=0.5, equal_axis=False, show_diag=False, 
                     )
        
         
-    x_period = f", {uplf.period_name_mapper[data['x']['column_to_map'][0]]}" if isinstance(data['x']['column_to_map'], list) else ''
-    y_period = f", {uplf.period_name_mapper[data['y']['column_to_map'][0]]}" if isinstance(data['y']['column_to_map'], list) else ''
+    x_period = f", {period_name_mapper[data['x']['column_to_map'][0]]}" if isinstance(data['x']['column_to_map'], list) else ''
+    y_period = f", {period_name_mapper[data['y']['column_to_map'][0]]}" if isinstance(data['y']['column_to_map'], list) else ''
     
     fig.update_layout(width=1000, height=900, font=dict(size=20), 
                       hovermode='closest', showlegend=True, dragmode='select',
@@ -122,13 +121,13 @@ def add_xy_selector():
         col3, col4 = st.columns([1, 1])
         with col3:
             st.markdown('### X axis')
-            xy_selected = {'x': ccf_view.select_para_of_interest(prompt='Type', suffix='_x',
+            xy_selected = {'x': select_para_of_interest(prompt='Type', suffix='_x',
                                                                  default_model='dQ, sumQ, rpe, C*2, R*5, t',
                                                                  default_period='iti_all',
                                                                  default_paras='relative_action_value_ic',)}
         with col4:
             st.markdown('### Y axis')
-            xy_selected.update(y=ccf_view.select_para_of_interest(prompt='Type', suffix='_y',
+            xy_selected.update(y=select_para_of_interest(prompt='Type', suffix='_y',
                                                                  default_model='dQ, sumQ, rpe, C*2, R*5, t',
                                                                  default_period='iti_all',
                                                                  default_paras='total_action_value',))
@@ -163,7 +162,7 @@ if __name__ == '__main__':
             size = cols[0].slider('dot size', 1, 30, step=1, value=10)
             opacity = cols[1].slider('opacity', 0.0, 1.0, step=0.05, value=0.7)
             if_ccf_color = cols[2].checkbox('use ccf color', value=True)
-            if_select_only = cols[2].checkbox('selected units only', value=False)
+            if_select_only = cols[2].checkbox('selected only', value=False)
             equal_axis = cols[3].checkbox('equal axis', value=xy_to_plot['x']['column_to_map'][2] == xy_to_plot['y']['column_to_map'][2])
             show_diag = cols[3].checkbox('show diagonal', value=xy_to_plot['x']['column_to_map_name'] == xy_to_plot['y']['column_to_map_name'])
             
@@ -171,7 +170,7 @@ if __name__ == '__main__':
         # for i in range(2): st.write('\n')
 
         st.markdown("---")
-        if_draw_units = unit_plot_settings(need_click=True)
+        if_draw_units = unit_draw_settings(need_click=True)
         
     if len(xy_to_plot['x']['column_selected']):
         with col2:

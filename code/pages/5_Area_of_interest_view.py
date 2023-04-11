@@ -5,10 +5,6 @@ import numpy as np
 
 from Home import add_unit_filter, get_fig_unit_all_in_one, init, select_t_sign_level
 
-import importlib
-xy_view = importlib.import_module('.3_X-Y_view', package='pages')
-
-
 pure_unit_color_mapping =  {'pure_dQ': 'darkviolet',
                             'pure_sumQ': 'deepskyblue',
                             'pure_contraQ': 'darkblue',
