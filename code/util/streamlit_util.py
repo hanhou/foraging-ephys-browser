@@ -310,6 +310,16 @@ def add_unit_selector():
                 st.session_state[f'df_selected_from_{source}'] = pd.DataFrame(columns=[st.session_state.unit_key_names])
                 st.experimental_rerun()
         
+        # Sync selected units across sources
+        cols = st.columns([4, 1])
+        sync_using = cols[0].selectbox('Sync all using', st.session_state.select_sources, index=0)
+        cols[1].write('\n\n')
+        if cols[1].button('🔄'):
+            for source in st.session_state.select_sources:
+                if source != sync_using:
+                    st.session_state[f'df_selected_from_{source}'] = st.session_state[f'df_selected_from_{sync_using}']
+            st.experimental_rerun()
+                
 
 def unit_plot_settings(default_source='xy_view', need_click=True):
     
@@ -339,7 +349,7 @@ def unit_plot_settings(default_source='xy_view', need_click=True):
 
 
 
-@st.cache_data(max_entries=100)
+# @st.cache_data(max_entries=100)
 def get_fig_unit_psth_only(key):
     fn = f'*{key["h2o"]}_{key["session_date"]}_{key["insertion_number"]}*u{key["unit"]:03}*'
     aoi = key["area_of_interest"]
@@ -354,7 +364,7 @@ def get_fig_unit_psth_only(key):
             
     return img
 
-@st.cache_data(max_entries=100)
+# @st.cache_data(max_entries=100)
 def get_fig_unit_drift_metric(key):
     fn = f'*{key["subject_id"]}_{key["session"]}_{key["insertion_number"]}_{key["unit"]:03}*'
     

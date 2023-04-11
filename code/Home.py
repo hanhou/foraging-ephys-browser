@@ -14,7 +14,7 @@ from PIL import Image, ImageColor
 import streamlit.components.v1 as components
 import streamlit_nested_layout
 
-from streamlit_util import filter_dataframe, aggrid_interactive_table_units, add_unit_filter, add_unit_selector
+from util.streamlit_util import filter_dataframe, aggrid_interactive_table_units, add_unit_filter, add_unit_selector
 
 
 if_profile = False

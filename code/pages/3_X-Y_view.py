@@ -1,10 +1,11 @@
 import streamlit as st
+ss = st.session_state
 import plotly.express as px
 import plotly.graph_objects as go
 import numpy as np
 import pandas as pd
 
-from streamlit_util import (filter_dataframe, aggrid_interactive_table_units, add_unit_selector, 
+from util.streamlit_util import (filter_dataframe, aggrid_interactive_table_units, add_unit_selector, 
                             add_unit_filter, unit_plot_settings, draw_selected_units)
 from streamlit_plotly_events import plotly_events
 
@@ -22,7 +23,7 @@ cache_fig_drift_metrics_folder = 'aind-behavior-data/Han/ephys/report/unit_drift
 cache_fig_psth_folder = 'aind-behavior-data/Han/ephys/report/all_units/'
 fs = s3fs.S3FileSystem(anon=False)
 
-if 'df' not in st.session_state: 
+if 'df' not in ss: 
     init()
 
 user_color_mapping = px.colors.qualitative.Plotly  # If not ccf color, use this color mapping
@@ -37,13 +38,13 @@ def plot_scatter(data, size=10, opacity=0.5, equal_axis=False, show_diag=False, 
     fig = go.Figure()
     
     if 't_' in x_name:
-        fig.add_vline(x=st.session_state['t_sign_level'], line_width=1, line_dash="dash", line_color="black")
+        fig.add_vline(x=ss['t_sign_level'], line_width=1, line_dash="dash", line_color="black")
         if not data['x']['if_take_abs']: 
-            fig.add_vline(x=-st.session_state['t_sign_level'], line_width=1, line_dash="dash", line_color="black")
+            fig.add_vline(x=-ss['t_sign_level'], line_width=1, line_dash="dash", line_color="black")
     if 't_' in y_name:
-        fig.add_hline(y=st.session_state['t_sign_level'], line_width=1, line_dash="dash", line_color="black")
+        fig.add_hline(y=ss['t_sign_level'], line_width=1, line_dash="dash", line_color="black")
         if not data['y']['if_take_abs']:
-            fig.add_hline(y=-st.session_state['t_sign_level'], line_width=1, line_dash="dash", line_color="black")
+            fig.add_hline(y=-ss['t_sign_level'], line_width=1, line_dash="dash", line_color="black")
     
     if show_diag:
         _min = df_xy.values.ravel().min()
@@ -60,19 +61,22 @@ def plot_scatter(data, size=10, opacity=0.5, equal_axis=False, show_diag=False, 
             scaleratio = 1,
         )   
     
-    df_color = pd.DataFrame.from_dict(st.session_state.aoi_color_mapping, orient='index', columns=['colors'])
+    if if_ccf_color:
+        df_color = pd.DataFrame.from_dict(ss.aoi_color_mapping, orient='index', columns=['colors'])
+    else:
+        df_color = pd.DataFrame.from_dict({aoi: user_color_mapping[i%len(user_color_mapping)] for i, aoi in enumerate(ss.aoi_color_mapping)}, orient='index', columns=['colors'])
     
     # Batch define color
     df_xy = df_xy.join(df_color, on='area_of_interest')  # all use normal colors
-    df_xy['opacity'] = opacity
+    df_xy['opacity'] = opacity        
 
-    if len(st.session_state.df_selected_from_xy_view):  # If there are selected dots, put unselcted dots to gray
-        un_selected = ~df_xy.index.isin(st.session_state.df_selected_from_xy_view.index)
+    if len(ss.df_selected_from_xy_view):  # If there are selected dots, put unselcted dots to gray
+        un_selected = ~df_xy.reset_index().set_index(ss.unit_key_names).index.isin(ss.df_selected_from_xy_view.reset_index().set_index(ss.unit_key_names).index)
         df_xy.loc[un_selected, 'colors'] = 'lightgrey'
         df_xy.loc[un_selected, 'opacity'] = 0.3
     
     # For each aoi, plot the dots
-    for i, aoi in enumerate([aoi for aoi in st.session_state.df['aoi'].index 
+    for i, aoi in enumerate([aoi for aoi in ss.df['aoi'].index 
                              if aoi in df_xy.reset_index().area_of_interest.values]):
         
         df_xy_this = df_xy.query(f'area_of_interest == "{aoi}"').reset_index()
@@ -144,7 +148,7 @@ if __name__ == '__main__':
         
         add_unit_selector()
 
-    st.session_state.aggrid_outputs = aggrid_interactive_table_units(df=st.session_state.df_unit_filtered, height=300)
+    ss.aggrid_outputs = aggrid_interactive_table_units(df=ss.df_unit_filtered, height=300)
     col1, _, col2 = st.columns((1, 0.1, 1.5))
 
     with col1:
@@ -168,7 +172,7 @@ if __name__ == '__main__':
         with col2:
             fig = plot_scatter(xy_to_plot, size=size, opacity=opacity, 
                                equal_axis=equal_axis, show_diag=show_diag, if_ccf_color=if_ccf_color,
-                               state=st.session_state.df_selected_from_xy_view   # Trigger replot when df_selected_from_xy_view changes, otherwise, the plot is cached
+                               state=ss.df_selected_from_xy_view   # Trigger replot when df_selected_from_xy_view changes, otherwise, the plot is cached
                                )
 
             # Select other Plotly events by specifying kwargs
@@ -184,8 +188,8 @@ if __name__ == '__main__':
             
             # If selected units change, rerun the whole app
             if len(df_selected_from_xy_view) and not (set(df_selected_from_xy_view.index) == 
-                                                      set(st.session_state.df_selected_from_xy_view.index)):
-                st.session_state.df_selected_from_xy_view = df_selected_from_xy_view
+                                                      set(ss.df_selected_from_xy_view.index)):
+                ss.df_selected_from_xy_view = df_selected_from_xy_view
                 st.experimental_rerun()
         
             if if_draw_units:

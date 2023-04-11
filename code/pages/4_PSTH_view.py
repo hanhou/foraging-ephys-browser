@@ -10,7 +10,7 @@ import dill
 import streamlit as st
 import streamlit_nested_layout
 from streamlit_plotly_events import plotly_events
-from streamlit_util import add_unit_filter
+from util.streamlit_util import add_unit_filter
 
 from util.z_score_psth import compute_group_tuning
 from util.plotly_util import add_plotly_errorbar
