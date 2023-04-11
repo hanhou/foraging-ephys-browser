@@ -182,6 +182,8 @@ def draw_ccf_heatmap(fig, units_to_overlay, slice_name):
     return
 
 def draw_ccf_units(fig, units_to_overlay, selected):
+    unselected_color = 'rgba(255, 255, 255, 0.2)'
+    
     units_to_overlay['size'] = _size_mapping(np.abs(units_to_overlay.z))
     
     if np.sum(units_to_overlay.z < 0) == 0:  # All positive values
@@ -194,7 +196,10 @@ def draw_ccf_units(fig, units_to_overlay, selected):
     # If there are selected dots, put unselcted dots to lighter color
     if len(selected):
         units_to_overlay.loc[~units_to_overlay.reset_index().set_index(ss.unit_key_names).index.
-                             isin(selected.reset_index().set_index(ss.unit_key_names).index), 'color'] = 'rgba(255, 255, 255, 0.2)'
+                             isin(selected.reset_index().set_index(ss.unit_key_names).index), 'color'] = unselected_color
+        
+    if if_select_only:
+        units_to_overlay.query(f'color != "{unselected_color}"', inplace=True)
     
     units_to_overlay = units_to_overlay.reset_index()
     fig.add_trace(go.Scattergl(x=units_to_overlay.x, 
@@ -214,7 +219,7 @@ def draw_ccf_units(fig, units_to_overlay, selected):
                                                      units_to_overlay.z, 
                                                      units_to_overlay.uid), axis=-1),
                                 showlegend=False,
-                                unselected=dict(marker_color='rgba(255, 255, 255, 0.2)'),
+                                unselected=dict(marker_color=unselected_color),
                                 ))
         
     return
@@ -510,6 +515,8 @@ if __name__ == '__main__':
                     with st.expander("Unit settings", expanded=True):
                         size_range = st.slider("size range", 0, 100, (0, 50))
                         size_gamma = st.slider("gamma", min_value=0.0, max_value=2.0, value=1.0, step=0.1)
+                        if_select_only = st.checkbox('selected units only', value=False)
+
             
             with st.expander('Heatmap', expanded=True):
                 ss.if_ccf_plot_heatmap = st.checkbox("Draw heatmap", 

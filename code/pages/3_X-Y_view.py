@@ -29,7 +29,7 @@ if 'df' not in ss:
 user_color_mapping = px.colors.qualitative.Plotly  # If not ccf color, use this color mapping
 
 @st.cache_data(ttl=24*3600, show_spinner=False)
-def plot_scatter(data, size=10, opacity=0.5, equal_axis=False, show_diag=False, if_ccf_color=True, **kwarg):
+def plot_scatter(data, size=10, opacity=0.5, equal_axis=False, show_diag=False, if_ccf_color=True, if_select_only=False, **kwarg):
     df_xy = xy_to_plot['x']['column_selected'].join(xy_to_plot['y']['column_selected'], rsuffix='_y')
     df_xy.columns = ['x', 'y']
     
@@ -73,14 +73,18 @@ def plot_scatter(data, size=10, opacity=0.5, equal_axis=False, show_diag=False, 
     if len(ss.df_selected_from_xy_view):  # If there are selected dots, put unselcted dots to gray
         un_selected = ~df_xy.reset_index().set_index(ss.unit_key_names).index.isin(ss.df_selected_from_xy_view.reset_index().set_index(ss.unit_key_names).index)
         df_xy.loc[un_selected, 'colors'] = 'lightgrey'
-        df_xy.loc[un_selected, 'opacity'] = 0.3
+        df_xy.loc[un_selected, 'opacity'] = 0.2
     
     # For each aoi, plot the dots
     for i, aoi in enumerate([aoi for aoi in ss.df['aoi'].index 
                              if aoi in df_xy.reset_index().area_of_interest.values]):
         
         df_xy_this = df_xy.query(f'area_of_interest == "{aoi}"').reset_index()
-        df_xy_this = pd.concat([df_xy_this.query('colors != "lightgrey"'), df_xy_this.query('colors == "lightgrey"')])
+        
+        if if_select_only:
+            df_xy_this = df_xy_this.query('colors != "lightgrey"')
+        else:
+            df_xy_this = pd.concat([df_xy_this.query('colors != "lightgrey"'), df_xy_this.query('colors == "lightgrey"')])
     
         fig.add_trace(go.Scattergl(x=df_xy_this.x, 
                                 y=df_xy_this.y,
@@ -155,12 +159,13 @@ if __name__ == '__main__':
         xy_to_plot = add_xy_selector()
         
         with st.expander('plot settings', expanded=True):
-            cols = st.columns([1, 1, 0.7])
+            cols = st.columns([1, 1, 0.7, 0.7])
             size = cols[0].slider('dot size', 1, 30, step=1, value=10)
             opacity = cols[1].slider('opacity', 0.0, 1.0, step=0.05, value=0.7)
             if_ccf_color = cols[2].checkbox('use ccf color', value=True)
-            equal_axis = cols[2].checkbox('equal axis', value=xy_to_plot['x']['column_to_map'][2] == xy_to_plot['y']['column_to_map'][2])
-            show_diag = cols[2].checkbox('show diagonal', value=xy_to_plot['x']['column_to_map_name'] == xy_to_plot['y']['column_to_map_name'])
+            if_select_only = cols[2].checkbox('selected units only', value=False)
+            equal_axis = cols[3].checkbox('equal axis', value=xy_to_plot['x']['column_to_map'][2] == xy_to_plot['y']['column_to_map'][2])
+            show_diag = cols[3].checkbox('show diagonal', value=xy_to_plot['x']['column_to_map_name'] == xy_to_plot['y']['column_to_map_name'])
             
             
         # for i in range(2): st.write('\n')
@@ -171,7 +176,7 @@ if __name__ == '__main__':
     if len(xy_to_plot['x']['column_selected']):
         with col2:
             fig = plot_scatter(xy_to_plot, size=size, opacity=opacity, 
-                               equal_axis=equal_axis, show_diag=show_diag, if_ccf_color=if_ccf_color,
+                               equal_axis=equal_axis, show_diag=show_diag, if_ccf_color=if_ccf_color, if_select_only=if_select_only,
                                state=ss.df_selected_from_xy_view   # Trigger replot when df_selected_from_xy_view changes, otherwise, the plot is cached
                                )
 
