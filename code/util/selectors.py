@@ -2,6 +2,7 @@ import streamlit as st
 ss = st.session_state
 
 import numpy as np
+import pandas as pd
 
 from util import *
 from util.streamlit_util import filter_dataframe
@@ -62,7 +63,9 @@ def select_para(multi=True,
 def select_para_of_interest(prompt="Map what to CCF?", suffix='',
                             default_model='dQ, sumQ, rpe, C*2, R*5, t',
                             default_period='iti_all',
-                            default_paras=None,):
+                            default_stat='t',
+                            default_paras=None,
+                            show_if_abs=True):
     
     type_to_map = st.selectbox(prompt,
                             ['unit tuning', 'unit stats'],
@@ -83,9 +86,10 @@ def select_para_of_interest(prompt="Map what to CCF?", suffix='',
         df_this_model = ss.df['df_period_linear_fit_all'].iloc[:, ss.df['df_period_linear_fit_all'].columns.get_level_values('multi_linear_model') == model]
 
         cols= st.columns([1, 1])
+        available_stat = ['t', 'beta', 'model_r2', 'model_bic'] + list(pure_unit_color_mapping.keys())
         stat = cols[0].selectbox("which statistic",
-                                ['t', 'beta', 'model_r2', 'model_bic'] + list(pure_unit_color_mapping.keys()), 
-                                0,
+                                available_stat, 
+                                available_stat.index(default_stat),
                                 key=f'stat{suffix}')  # Could be model level stats, like 'model_r2'
         available_paras_this_model = [p for p in para_name_mapper if p in 
                                     df_this_model.columns[df_this_model.columns.get_level_values('stat_name') == stat
@@ -101,7 +105,7 @@ def select_para_of_interest(prompt="Map what to CCF?", suffix='',
             para = ''
         
         column_to_map = (period, model, stat, para)
-        column_to_map_name = f'{stat}_{para_name_mapper[para]}' if para != '' else stat
+        column_to_map_name = f'{stat}_{para_name_mapper[para]}, {period}' if para != '' else stat
         if_map_pure = 'pure' in column_to_map[2]
         
     elif type_to_map == 'unit stats':
@@ -115,10 +119,13 @@ def select_para_of_interest(prompt="Map what to CCF?", suffix='',
     column_selected = ss.df_unit_filtered_merged.loc[:, [column_to_map]]
     column_selected.dropna(inplace=True)
     
-    if_take_abs = st.checkbox("Use abs()?", value=False, key='abs'+suffix) if np.any(column_selected < 0) else False
+    if show_if_abs:
+        if_take_abs = st.checkbox("Use abs()?", value=False, key='abs'+suffix) if np.any(column_selected < 0) else False
 
-    if if_take_abs:
-        column_selected = np.abs(column_selected)
+        if if_take_abs:
+            column_selected = np.abs(column_selected)
+    else:
+        if_take_abs = False
         
     return dict(column_to_map=column_to_map, column_to_map_name=column_to_map_name, 
                 if_map_pure=if_map_pure, if_take_abs=if_take_abs,
@@ -155,7 +162,7 @@ def add_unit_selector():
             if cols[1].button('❌' + ' '*i):  # Avoid duplicat key
                 ss[f'df_selected_from_{source}'] = pd.DataFrame(columns=[ss.unit_key_names])
                 st.experimental_rerun()
-        
+                
         # Sync selected units across sources
         cols = st.columns([4, 1])
         sync_using = cols[0].selectbox('Sync all using', ss.select_sources, index=0)
@@ -166,3 +173,31 @@ def add_unit_selector():
                     ss[f'df_selected_from_{source}'] = ss[f'df_selected_from_{sync_using}']
             st.experimental_rerun()
                 
+        # Sort selected units
+        with st.expander('Sort selected units', expanded=False):
+            dict_selected = select_para_of_interest(prompt="Sort by", suffix='_selected',
+                                                    default_model='dQ, sumQ, rpe, C*2, R*5, t',
+                                                    default_period='iti_all',
+                                                    default_stat='beta',
+                                                    default_paras=None,
+                                                    show_if_abs=False)
+            col_sort_by_name = f'sort_by_{dict_selected["column_to_map_name"]}'
+            to_sort = ss.df_unit_filtered_merged[[dict_selected['column_to_map']]
+                                                 ].rename(columns={dict_selected['column_to_map']: col_sort_by_name})
+            
+            cols = st.columns([1, 1])
+            if_abs = cols[0].checkbox('if abs', value=True)
+            if_acsending = cols[1].checkbox('if acsending', value=False)
+            
+            if st.button('Sort selected!'):
+                for source in ss.select_sources:
+                    if not len(ss[f'df_selected_from_{source}']): continue
+                    df = ss[f'df_selected_from_{source}']
+                    df.drop(columns=[col for col in df.columns if 'sort_by'], inplace=True)# Remove sort_by if exists
+                    df = df.reset_index().merge(to_sort.reset_index(), on=ss.unit_key_names, how='inner', suffixes=('', '_y')).set_index(ss.unit_key_names)  # Add sort by
+                    if if_abs:
+                        ss[f'df_selected_from_{source}'] = df.reindex(df[col_sort_by_name].abs().sort_values(ascending=if_acsending).index) 
+                    else:
+                        ss[f'df_selected_from_{source}'] = df.reindex(df[col_sort_by_name].sort_values(ascending=if_acsending).index)          
+
+                st.experimental_rerun()

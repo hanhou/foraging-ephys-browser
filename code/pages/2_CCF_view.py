@@ -405,7 +405,7 @@ def _update_selected_index_from_ccf(dict_selected, view):
         ).merge(df_selected, how='inner').set_index(ss.unit_key_names)
     
     # If selected units change, rerun the whole app
-    if not (set(df_selected.index) == set(ss[f'df_selected_from_ccf_{view}'].index)):
+    if not (set(df_selected.reset_index().uid) == set(ss[f'df_selected_from_ccf_{view}'].reset_index().uid)):
         ss[f'df_selected_from_ccf_{view}'] = df_selected
         st.experimental_rerun()
         

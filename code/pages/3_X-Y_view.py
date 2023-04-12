@@ -191,8 +191,8 @@ if __name__ == '__main__':
                                                             for xy in selected_points_xy_view], axis=0)
             
             # If selected units change, rerun the whole app
-            if len(df_selected_from_xy_view) and not (set(df_selected_from_xy_view.index) == 
-                                                      set(ss.df_selected_from_xy_view.index)):
+            if len(df_selected_from_xy_view) and not (set(df_selected_from_xy_view.reset_index().uid) == 
+                                                      set(ss.df_selected_from_xy_view.reset_index().uid)):
                 ss.df_selected_from_xy_view = df_selected_from_xy_view
                 st.experimental_rerun()
         

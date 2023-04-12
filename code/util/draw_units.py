@@ -32,11 +32,11 @@ def unit_draw_settings(default_source='xy_view', need_click=True):
     
     if need_click:
         cols = st.columns([1, 3])
-        auto_draw = cols[0].checkbox('Auto draw', value=False)
+        ss.auto_draw = cols[0].checkbox('Auto draw', value=ss.auto_draw if 'auto_draw' in ss else False)
         draw_it = cols[1].button(f'================ 🎨 Draw! ================', use_container_width=True)
     else:
         draw_it = True
-    return draw_it or auto_draw
+    return draw_it or ss.auto_draw
 
 
 
@@ -78,18 +78,27 @@ def draw_selected_units():
     for source in ss.select_sources:
         if source in ss.unit_select_source: break
         
-    df_selected = ss[f'df_selected_from_{source}']
+    # Add ccf_z
+    df_selected = ss[f'df_selected_from_{source}'].reset_index()
+    if 'ccf_z' not in df_selected.columns:
+        df_selected = df_selected.merge(ss.df_unit_filtered[['uid', 'ccf_z']], on='uid')
     
     st.write(f'Loading selected {len(df_selected)} units...')
     my_bar = st.columns((1, 7))[0].progress(0)
 
     cols = st.columns([1]*ss.num_cols)
     
-    for i, key in enumerate(df_selected.reset_index().to_dict(orient='records')):
+    sort_by_col = [col for col in df_selected.columns if 'sort_by' in col]
+    
+    for i, key in enumerate(df_selected.to_dict(orient='records')):
         key['session_date'] = datetime.strftime(datetime.strptime(str(key['session_date']), '%Y-%m-%d %H:%M:%S'), '%Y%m%d')
         col = cols[i%ss.num_cols]
-        col.markdown(f'''<h5 style='text-align: center; color: orange;'>{key["h2o"]}, ''' 
-            f'''Session {key["session"]}, {key['session_date']}, unit {key["unit"]} ({key["area_of_interest"]})</h3>''',
+        
+        sort_str = f'''<br>[{sort_by_col[0]} = {key[sort_by_col[0]]:.2f}]''' if sort_by_col else ''''''
+        col.markdown(f'''<h5 style='text-align: center; color: orange;'>'''
+                     f'''{"Left" if key["ccf_z"] < 5700 else "Right"} {key["area_of_interest"]}'''
+                     f''' ({key["h2o"]}s{key["session"]}i{key['insertion_number']}u{key["unit"]}, uid={key['uid']})'''
+                     f'''{sort_str}''',
             unsafe_allow_html=True)
 
         for draw_type in ss.draw_types:
