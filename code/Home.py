@@ -47,12 +47,13 @@ else:
 def load_data(tables=['sessions']):
     df = {}
     for table in tables:
-        file_name = cache_folder + f'{table}.pkl'
-        if use_s3:
-            with fs.open(file_name) as f:
-                df[table] = pd.read_pickle(f)
-        else:
-            df[table] = pd.read_pickle(file_name)
+        with st.spinner(f'Loading {table}...'):
+            file_name = cache_folder + f'{table}.pkl'
+            if use_s3:
+                with fs.open(file_name) as f:
+                    df[table] = pd.read_pickle(f)
+            else:
+                df[table] = pd.read_pickle(file_name)
         
     return df
 

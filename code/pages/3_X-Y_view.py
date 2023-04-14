@@ -27,7 +27,7 @@ if 'df' not in ss:
 
 user_color_mapping = px.colors.qualitative.Plotly  # If not ccf color, use this color mapping
 
-@st.cache_data(ttl=24*3600, show_spinner=False)
+# @st.cache_data(ttl=24*3600, show_spinner=False)
 def plot_scatter(data, size=10, opacity=0.5, equal_axis=False, show_diag=False, if_ccf_color=True, if_select_only=False, **kwarg):
     df_xy = xy_to_plot['x']['column_selected'].join(xy_to_plot['y']['column_selected'], rsuffix='_y')
     df_xy.columns = ['x', 'y']
@@ -122,13 +122,13 @@ def add_xy_selector():
         with col3:
             st.markdown('### X axis')
             xy_selected = {'x': select_para_of_interest(prompt='Type', suffix='_x',
-                                                                 default_model='dQ, sumQ, rpe, C*2, R*5, t',
+                                                                 default_model='dQ, sumQ, rew, chQ, C*2, R*5, t',
                                                                  default_period='iti_all',
                                                                  default_paras='relative_action_value_ic',)}
         with col4:
             st.markdown('### Y axis')
             xy_selected.update(y=select_para_of_interest(prompt='Type', suffix='_y',
-                                                                 default_model='dQ, sumQ, rpe, C*2, R*5, t',
+                                                                 default_model='dQ, sumQ, rew, chQ, C*2, R*5, t',
                                                                  default_period='iti_all',
                                                                  default_paras='total_action_value',))
             

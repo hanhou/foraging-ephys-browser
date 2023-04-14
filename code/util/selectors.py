@@ -26,7 +26,7 @@ def select_period(multi=True, label='Periods to plot',
     
 
 def select_model(available_models=list(model_name_mapper.keys()),
-                 default_model='dQ, sumQ, rpe, C*2, R*5, t',
+                 default_model='dQ, sumQ, rew, chQ, C*2, R*5, t',
                 label='Model to plot', 
                 suffix='',
                 col=st):
@@ -61,7 +61,7 @@ def select_para(multi=True,
 
 
 def select_para_of_interest(prompt="Map what to CCF?", suffix='',
-                            default_model='dQ, sumQ, rpe, C*2, R*5, t',
+                            default_model='dQ, sumQ, rew, chQ, C*2, R*5, t',
                             default_period='iti_all',
                             default_stat='t',
                             default_paras=None,
@@ -176,7 +176,7 @@ def add_unit_selector():
         # Sort selected units
         with st.expander('Sort selected units', expanded=False):
             dict_selected = select_para_of_interest(prompt="Sort by", suffix='_selected',
-                                                    default_model='dQ, sumQ, rpe, C*2, R*5, t',
+                                                    default_model='dQ, sumQ, rew, chQ, C*2, R*5, t',
                                                     default_period='iti_all',
                                                     default_stat='beta',
                                                     default_paras=None,

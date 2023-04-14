@@ -14,7 +14,9 @@ sig_prop_color_mapping =  {'dQ': 'darkviolet',
                             'sumQ': 'deepskyblue',
                             'contraQ': 'darkblue',
                             'ipsiQ': 'darkorange',
-                            'rpe': 'gray'}
+                            'rpe': 'gray',
+                            'reward': 'gray',
+                            'chosenQ': 'black'}
 
 
 
