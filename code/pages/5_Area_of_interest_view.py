@@ -5,13 +5,6 @@ import numpy as np
 
 from Home import add_unit_filter, get_fig_unit_all_in_one, init, select_t_sign_level
 
-import importlib
-xy_view = importlib.import_module('.3_X-Y_view', package='pages')
-
-
-if 'df' not in st.session_state: 
-    init()
-
 pure_unit_color_mapping =  {'pure_dQ': 'darkviolet',
                             'pure_sumQ': 'deepskyblue',
                             'pure_contraQ': 'darkblue',
@@ -21,7 +14,9 @@ sig_prop_color_mapping =  {'dQ': 'darkviolet',
                             'sumQ': 'deepskyblue',
                             'contraQ': 'darkblue',
                             'ipsiQ': 'darkorange',
-                            'rpe': 'gray'}
+                            'rpe': 'gray',
+                            'reward': 'gray',
+                            'chosenQ': 'black'}
 
 
 
@@ -170,4 +165,7 @@ def app():
     #     st.experimental_rerun()
         
 if __name__ == '__main__':
+    if 'df' not in st.session_state: 
+        init()
+
     app()
