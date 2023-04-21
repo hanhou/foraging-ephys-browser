@@ -1,4 +1,4 @@
-# hash:sha256:158f41bfd7543f3c3677969b2ab82f4c7103603702e4c407c0204a35ed86d93d
+# hash:sha256:1283fe49fcd74b4b3b939eb0aef6a8f335cf2962b508c46a947c0a34583f99b5
 FROM registry.codeocean.allenneuraldynamics.org/codeocean/jupyterlab:3.0.9-miniconda4.9.2-python3.8-ubuntu20.04
 
 ARG DEBIAN_FRONTEND=noninteractive
@@ -25,6 +25,7 @@ RUN pip install -U --no-cache-dir \
     contourpy==1.0.6 \
     cycler==0.11.0 \
     decorator==5.1.1 \
+    dill==0.3.6 \
     entrypoints==0.4 \
     fonttools==4.38.0 \
     frozenlist==1.3.3 \
@@ -80,9 +81,10 @@ RUN pip install -U --no-cache-dir \
     validators==0.20.0 \
     watchdog==2.1.9 \
     wrapt==1.14.1 \
+    xarray==2023.1.0 \
     yarl==1.8.1 \
-    zipp==3.10.0 \
-    dill
+    zarr==2.14.2 \
+    zipp==3.10.0
 
 ADD "https://github.com/coder/code-server/releases/download/v4.9.0/code-server-4.9.0-linux-amd64.tar.gz" /.code-server/code-server.tar.gz
 	
