@@ -2,9 +2,9 @@
 Streamlit app for browsing foraging ephys data.
 
 ### Running in Code Ocean 
-(needs Code Ocean login. The url will change from time to time. Last updated 06/12/2023)
+(needs Code Ocean login. The url will change from time to time. Last updated 07/17/2023)
 
-https://codeocean.allenneuraldynamics.org/cw/84f36f66-119d-49fd-a93b-fdb2e1a105d8/proxy/8501/
+https://codeocean.allenneuraldynamics.org/cw/c4f35fc9-727e-4978-a7fe-2fc38895e9ae/proxy/8502/
 
 ### Running on Streamlit Community Cloud 
 (due to limited resource, the app may crash or not up-to-date)
