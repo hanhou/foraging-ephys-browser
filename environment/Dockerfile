@@ -1,4 +1,4 @@
-# hash:sha256:1283fe49fcd74b4b3b939eb0aef6a8f335cf2962b508c46a947c0a34583f99b5
+# hash:sha256:59f8b3d0bfe064d8cddcda06a516bc00412a5595cc94440b725321ddd0b7b7d8
 FROM registry.codeocean.allenneuraldynamics.org/codeocean/jupyterlab:3.0.9-miniconda4.9.2-python3.8-ubuntu20.04
 
 ARG DEBIAN_FRONTEND=noninteractive
@@ -14,7 +14,7 @@ RUN pip install -U --no-cache-dir \
     aiosignal==1.3.1 \
     altair==4.2.0 \
     async-timeout==4.0.2 \
-    attrs==22.1.0 \
+    attrs==23.1.0 \
     blinker==1.5 \
     botocore==1.27.59 \
     cachetools==5.2.0 \
@@ -36,15 +36,15 @@ RUN pip install -U --no-cache-dir \
     importlib-metadata==5.0.0 \
     jinja2==3.1.2 \
     jmespath==1.0.1 \
-    jsonschema==4.17.1 \
+    jsonschema==4.18.4 \
     kiwisolver==1.4.4 \
     markupsafe==2.1.1 \
     matplotlib==3.6.2 \
     multidict==6.0.2 \
     nptyping==2.4.1 \
-    numpy==1.23.5 \
+    numpy==1.24.4 \
     packaging==21.3 \
-    pandas==1.5.2 \
+    pandas==1.5.3 \
     pillow==9.3.0 \
     plotly==5.11.0 \
     protobuf==3.20.3 \
@@ -57,16 +57,16 @@ RUN pip install -U --no-cache-dir \
     pyrsistent==0.19.2 \
     python-dateutil==2.8.2 \
     python-decouple==3.6 \
-    pytz==2022.6 \
+    pytz==2023.3 \
     pytz-deprecation-shim==0.1.0.post0 \
     requests==2.28.1 \
     rich==12.6.0 \
     s3fs==2022.11.0 \
-    scipy==1.10.0 \
+    scipy==1.10.1 \
     semver==2.13.0 \
     six==1.16.0 \
     smmap==5.0.0 \
-    streamlit==1.15.1 \
+    streamlit==1.20.0 \
     streamlit-aggrid==0.3.3 \
     streamlit-nested-layout==0.1.1 \
     streamlit-plotly-events==0.0.6 \
@@ -75,7 +75,7 @@ RUN pip install -U --no-cache-dir \
     toolz==0.12.0 \
     tornado==6.2 \
     typing-extensions==4.4.0 \
-    tzdata==2022.6 \
+    tzdata==2023.3 \
     tzlocal==4.2 \
     urllib3==1.26.13 \
     validators==0.20.0 \
@@ -84,7 +84,8 @@ RUN pip install -U --no-cache-dir \
     xarray==2023.1.0 \
     yarl==1.8.1 \
     zarr==2.14.2 \
-    zipp==3.10.0
+    zipp==3.16.2 \
+    pynwb --ignore-installed ruamel.yaml
 
 ADD "https://github.com/coder/code-server/releases/download/v4.9.0/code-server-4.9.0-linux-amd64.tar.gz" /.code-server/code-server.tar.gz
 	
@@ -92,3 +93,6 @@ RUN cd /.code-server \
 	&& tar -xvf code-server.tar.gz \
 	&& rm code-server.tar.gz \
 	&& ln -s /.code-server/code-server-4.9.0-linux-amd64/bin/code-server  /usr/bin/code-server
+
+COPY postInstall /
+RUN /postInstall
