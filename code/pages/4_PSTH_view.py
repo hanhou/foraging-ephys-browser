@@ -139,15 +139,15 @@ if __name__ == '__main__':
     #                     'rpe_iti_start_after_2': dict(align_to='iti_start', time_win=[0, 2], latent_name='rpe', ),
     #                    }
     
-    fname = '473360_49_spike_aligned_to_go_cue'
+    fname = '473360_49_psth.zarr'
     s3_path = f's3://aind-behavior-data/Han/ephys/export/psth/{fname}'
     fs = s3fs.S3FileSystem(anon=False)
-    s3_store = s3fs.S3Map(root=s3_path, s3=fs, check=False)
+    s3_store = s3fs.S3Map(root=s3_path, s3=fs, check=True)
     ds_out = xr.open_zarr(s3_store, consolidated=True)
     
     import matplotlib.pyplot as plt
     fig, axes = plt.subplots(1, 1, figsize=(5, 5))
-    ds_out.spike_aligned_to_go_cue [100, :, :].plot(ax=axes)
+    ds_out.spike_count_aligned_to_choice[150, :, :].plot(ax=axes)
     st.pyplot(fig)
 
     time_epochs = ['go_cue_before_2', 'iti_start_before_1', 'iti_start_after_2'] 
