@@ -24,6 +24,13 @@ if if_debug:
 
 primary_keys = ['subject_id', 'session', 'insertion_number', 'unit']
 
+def hash_xarray(ds):
+    return hash(1)  # Fixed hash because I only have one dataset here
+
+@st.cache_data(ttl=3600, hash_funcs={xr.Dataset: hash_xarray})
+def _get_data_from_zarr(ds, var_name, model, para_stat):
+    return ds[var_name].sel(model=model, para_stat=para_stat).values  # Get values from zarr here to avoid too much overhead
+    
 def plot_linear_fitting_over_time(ds, model, paras, align_tos,
                                   para_stat='t',):
     
@@ -49,7 +56,7 @@ def plot_linear_fitting_over_time(ds, model, paras, align_tos,
         t_name = f'linear_fit_t_center_aligned_to_{align_to}'
         ts = ds[t_name].values       
          
-        data_all = ds[var_name].sel(model=model, para_stat=para_stat).values  # Get values from zarr here to avoid too much overhead
+        data_all = _get_data_from_zarr(ds, var_name, model, para_stat)
             
         for row, para in enumerate(paras):       
             for area, color in st.session_state.aoi_color_mapping.items():
