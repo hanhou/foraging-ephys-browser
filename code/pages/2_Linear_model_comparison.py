@@ -328,7 +328,9 @@ if __name__ == '__main__':
     if 'df' not in st.session_state: 
         init()
     
-    
+    with st.sidebar:    
+        add_unit_filter()
+            
     # Prepare df
     df_period_linear_fit_all = st.session_state.df['df_period_linear_fit_all']
     unit_key_names = ['subject_id', 'session', 'insertion_number', 'unit']
@@ -344,9 +346,6 @@ if __name__ == '__main__':
                                 yaxis_title_font_size=x,
                                 legend_font_size=x,
                                 legend_title_font_size=x,)
-    
-    with st.sidebar:    
-        add_unit_filter()
 
     # --- Model comparison ---
     st.markdown('### Select a tab here 👇')

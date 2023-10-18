@@ -108,7 +108,10 @@ if __name__ == '__main__':
 
     if 'df' not in st.session_state: 
         init()
-    
+        
+    with st.sidebar:    
+        add_unit_filter()
+
     
     # --- 1. Fetch zarr ---
     try:   # Try local first (if in CO)
@@ -139,8 +142,6 @@ if __name__ == '__main__':
                                 legend_font_size=x,
                                 legend_title_font_size=x,)
     
-    with st.sidebar:    
-        add_unit_filter()
 
         
     # --- t-distribution, compare areas ---
