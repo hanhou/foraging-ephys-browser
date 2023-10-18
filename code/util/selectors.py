@@ -32,7 +32,7 @@ def select_model(available_models=list(model_name_mapper.keys()),
                 col=st):
     model_name = col.selectbox(label,
                                [model_name_mapper[m] for m in available_models], 
-                                available_models.index(default_model),
+                                available_models.index(default_model) if default_model in available_models else 1,
                                 key=f'model_name{suffix}')
     model = [m for m in model_name_mapper if model_name_mapper[m] == model_name][0]
     return model_name, model
