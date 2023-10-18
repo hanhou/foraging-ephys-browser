@@ -16,9 +16,11 @@ from util import *
 from util.selectors import (add_unit_filter, select_period, select_model, select_para)
 from Home import init, _to_theta_r, select_t_sign_level, t_to_p, p_to_t
 
-from streamlit_profiler import Profiler
-p = Profiler()
-p.start()
+if_debug = True
+if if_debug:
+    from streamlit_profiler import Profiler
+    p = Profiler()
+    p.start()
 
 primary_keys = ['subject_id', 'session', 'insertion_number', 'unit']
 
@@ -41,27 +43,31 @@ def plot_linear_fitting_over_time(ds, model, paras, align_tos,
     
     # Add aoi to df_unit_keys; right join to apply the filtering
     df_unit_keys_filtered_and_with_aoi = df_unit_keys.merge(df_filtered_unit_with_aoi, on=primary_keys, how='right') 
-    
-    for row, para in enumerate(paras):
-        for col, align_to in enumerate(align_tos):
+       
+    for col, align_to in enumerate(align_tos):
+        var_name = f'linear_fit_para_stats_aligned_to_{align_to}'
+        t_name = f'linear_fit_t_center_aligned_to_{align_to}'
+        ts = ds[t_name].values       
+         
+        data_all = ds[var_name].sel(model=model, para_stat=para_stat).values  # Get values from zarr here to avoid too much overhead
             
-            var_name = f'linear_fit_para_stats_aligned_to_{align_to}'
-            t_name = f'linear_fit_t_center_aligned_to_{align_to}'
-            ts = ds[t_name].values
-            
-            data_all = ds[var_name].sel(model=model, para=para, para_stat='t')
-            
+        for row, para in enumerate(paras):       
             for area, color in st.session_state.aoi_color_mapping.items():
-                
                 # Get unit_ind for this area
-                unit_ind_this_area = df_unit_keys_filtered_and_with_aoi[df_unit_keys_filtered_and_with_aoi.area_of_interest == area].index
+                unit_ind_this_area = df_unit_keys_filtered_and_with_aoi[df_unit_keys_filtered_and_with_aoi.area_of_interest == area].unit_ind
+                
+                if not len(unit_ind_this_area): 
+                    continue
                 
                 # Select data for this area
-                data_this_area = np.abs(data_all.sel(unit_ind=unit_ind_this_area).values)
-                n = len(data_this_area)
+                data_this = data_all[unit_ind_this_area, 
+                                     :, 
+                                     list(ds.para).index(para),
+                                     ]
+                n = len(data_this)
                 
                 fig.add_trace(go.Scattergl(x=ts, 
-                                            y=np.median(data_this_area, axis=0),
+                                            y=np.nanmedian(np.abs(data_this), axis=0),
                                             mode='lines',
                                             line=dict(color=color),
                                             name=area,
@@ -69,7 +75,7 @@ def plot_linear_fitting_over_time(ds, model, paras, align_tos,
                                             showlegend=col==0 and row ==0,
                                             hovertemplate=
                                                 '%s, n = %s<br>' % (area, n) +
-                                                '%{y:%2.1f} units, t > %{x:.2f}<br><extra></extra>',
+                                                '<extra></extra>',
                                             visible=True,
                                             ),
                             row=row+1, col=col+1)
@@ -77,7 +83,7 @@ def plot_linear_fitting_over_time(ds, model, paras, align_tos,
             # fig.add_vline(x=2.0, line_color='gray', line_dash='dash',
             #             row=row+1, col=col+1)
             
-            finished = (row * len(align_tos) + col + 1) / (len(align_tos) * len(paras))
+            finished = (col * len(paras) + row + 1) / (len(align_tos) * len(paras))
             progress_bar.progress(finished, text=f'{finished:.0%}')
 
 
@@ -105,14 +111,14 @@ if __name__ == '__main__':
     
     
     # --- 1. Fetch zarr ---
-    # try:   # Try local first (if in CO)
-    #     zarr_store = '/root/capsule/data/datajoint_psth_linear_fit_over_timeall_linear_fit_over_time.zarr'
-    #     ds_linear_fit_over_time = xr.open_zarr(zarr_store, consolidated=True)
-    # except:  # Else, from s3
-    s3_path = f's3://aind-behavior-data/Han/ephys/export/psth/all_linear_fit_over_time.zarr'
-    fs = s3fs.S3FileSystem(anon=False)
-    zarr_store = s3fs.S3Map(root=s3_path, s3=fs, check=True)
-    ds_linear_fit_over_time = xr.open_zarr(zarr_store, consolidated=True)
+    try:   # Try local first (if in CO)
+        zarr_store = '/root/capsule/data/datajoint_psth_linear_fit_over_timeall_linear_fit_over_time.zarr'
+        ds_linear_fit_over_time = xr.open_zarr(zarr_store, consolidated=True)
+    except:  # Else, from s3
+        s3_path = f's3://aind-behavior-data/Han/ephys/export/psth/all_linear_fit_over_time.zarr'
+        fs = s3fs.S3FileSystem(anon=False)
+        zarr_store = s3fs.S3Map(root=s3_path, s3=fs, check=True)
+        ds_linear_fit_over_time = xr.open_zarr(zarr_store, consolidated=True)
     
     align_tos = ds_linear_fit_over_time.align_tos
     models = ds_linear_fit_over_time.linear_models
@@ -152,7 +158,10 @@ if __name__ == '__main__':
 
     cols = st.columns([1, 1, 1])
     
-    _, selected_model = select_model(available_models=list(models.keys()), col=cols[0])
+    selected_model = cols[0].selectbox('Linear model',
+                                        list(models.keys()), 
+                                        1,
+                                       )
 
     available_paras_this_model = models[selected_model]
     
@@ -177,4 +186,5 @@ if __name__ == '__main__':
 
         plotly_events(fig, override_height=fig.layout.height*1.1, override_width=fig.layout.width, click_event=False)
         
-    p.stop()
+    if if_debug:
+        p.stop()

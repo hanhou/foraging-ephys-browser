@@ -24,17 +24,13 @@ all_models =  [
                'dQ, sumQ, rpe, C*2, R*10, t',
                'contraQ, ipsiQ, rpe',
                'contraQ, ipsiQ, rpe, C*2, R*5, t',
-               
-               # different formats in linear fitting over time...
-               'dQ, sumQ, rew, chQ, choices',
-               'dQ, sumQ, rew, chQ, choices, spike_auto, trial_num']
+               ]
 
 
 model_name_mapper = {model:  ' + '.join([{'dQ': 'dQ', ' sumQ': 'sumQ', ' rpe': 'rpe', 'contraQ': 'contraQ', ' ipsiQ': 'ipsiQ',
                                         ' C*2': 'choice', ' t': 'trial#', 
                                         ' R*1': 'firing back 1', ' R*5': 'firing back 5', ' R*10': 'firing back 10',
                                         ' rew': 'rew', ' chQ': 'chosenQ', 
-                                        ' choices': 'choice', ' spike_auto': ' firing back 5', ' trial_num': 'trial#'  # added for different formats in linear fitting over time
                                         }[var] for var in model.split(',')])
                     for model in all_models}
 
