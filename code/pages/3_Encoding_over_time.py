@@ -23,6 +23,20 @@ if if_debug:
     p.start()
 
 primary_keys = ['subject_id', 'session', 'insertion_number', 'unit']
+plot_settings = {'go_cue': {'win': [-1, 3], 'others': [2]},  # Plot window and other time points
+                'choice': {'win': [-1, 3], 'others': [2]},
+                'iti_start': {'win': [-2.5, 6], 'others': [-2, 4.75]}
+                }
+
+area_aggr_func_mapping = {    
+                            # func, (min, max, step, default)
+                            'median': lambda x: np.nanmedian(x, axis=0), 
+                            'median abs()': lambda x: np.nanmedian(np.abs(x), axis=0),      
+                            'mean': lambda x: np.nanmean(x, axis=0),
+                            'mean abs()': lambda x: np.nanmean(np.abs(x), axis=0),
+                            r'% significant units': lambda x: sum(np.abs(x) > sign_level) / len(x) * 100,  # para_stat must be 't'
+                            }
+
 
 def hash_xarray(ds):
     return hash(1)  # Fixed hash because I only have one dataset here
@@ -32,14 +46,17 @@ def _get_data_from_zarr(ds, var_name, model, para_stat):
     return ds[var_name].sel(model=model, para_stat=para_stat).values  # Get values from zarr here to avoid too much overhead
     
 def plot_linear_fitting_over_time(ds, model, paras, align_tos,
-                                  para_stat='t',):
+                                  para_stat='t', aggr_func='median',
+                                  sync_y=True):
     
     fig = make_subplots(rows=len(paras), cols=len(align_tos), 
                         subplot_titles=align_tos,
                         shared_yaxes=True,
                         shared_xaxes=True,
-                        vertical_spacing=0.02,
-                        x_title='Time (s)',
+                        vertical_spacing=0.03,
+                        x_title='Time (s)', 
+                        column_widths=[col['win'][1] - col['win'][0] 
+                                       for col in plot_settings.values()]
                         )
     
     progress_bar = st.columns([1, 15])[0].progress(0, text='0%')
@@ -73,8 +90,11 @@ def plot_linear_fitting_over_time(ds, model, paras, align_tos,
                                      ]
                 n = len(data_this)
                 
+                # Apply aggregation function
+                y = area_aggr_func_mapping[aggr_func](data_this)
+                
                 fig.add_trace(go.Scattergl(x=ts, 
-                                            y=np.nanmedian(np.abs(data_this), axis=0),
+                                            y=y,
                                             mode='lines',
                                             line=dict(color=color),
                                             name=area,
@@ -87,21 +107,43 @@ def plot_linear_fitting_over_time(ds, model, paras, align_tos,
                                             ),
                             row=row+1, col=col+1)
 
-            # fig.add_vline(x=2.0, line_color='gray', line_dash='dash',
-            #             row=row+1, col=col+1)
+            # Add type I error
+            if aggr_func == r'% significant units':
+                fig.add_hline(y=t_to_p(sign_level) * 100, row=row+1, col=col+1, 
+                              line_dash='dash', line_color='black', line_width=1)
+            
+            # Add indicators for other time points
+            for other_time in plot_settings[align_to]['others']:
+                fig.add_vline(x=other_time, line_color='gray', line_dash='dash',
+                                row=row+1, col=col+1)
             
             finished = (col * len(paras) + row + 1) / (len(align_tos) * len(paras))
             progress_bar.progress(finished, text=f'{finished:.0%}')
+            
+        # set x range
+        fig.update_xaxes(range=plot_settings[align_to]['win'], row=row+1, col=col+1)   
+        
+        if sync_y:
+            y_min = 0
+            y_max = 0
+            for data in fig.data:
+                y_min = min(y_min, np.nanmin(data.y))
+                y_max = max(y_max, np.nanmax(data.y))
+            
+            for row in range(len(paras)):
+                fig.update_yaxes(range=[y_min, y_max * 1.1], row=row+1, col=col+1)
 
 
     for row, para in enumerate(paras):
         fig['layout'][f'yaxis{1 + row * len(align_tos)}']['title'] = para
 
     # fig.update_traces(line_width=3)
-    fig.update_layout(width=min(2000, 400 + 270 * len(align_tos)), 
+    fig.update_layout(width=min(2000, 400 + 300 * len(align_tos)), 
                       height=200 + 240 * len(paras),
                      font_size=17, hovermode='closest',
-                     title= f'(Total number of units = {len(df_unit_keys_filtered_and_with_aoi)})',
+                     title= f'{aggr_func} {f"(p < {t_to_p(sign_level):.2g})" if aggr_func == r"% significant units" else "of {para_stat}"}' 
+                            f' (N = {len(df_unit_keys_filtered_and_with_aoi)})' +
+                            f'',
                      title_x=0.01,
                      )
     fig.update_annotations(font_size=20)
@@ -133,15 +175,6 @@ if __name__ == '__main__':
     align_tos = ds_linear_fit_over_time.align_tos
     models = ds_linear_fit_over_time.linear_models
     
-    # Prepare df
-    df_period_linear_fit_all = st.session_state.df['df_period_linear_fit_all']
-    unit_key_names = ['subject_id', 'session', 'insertion_number', 'unit']
-    # Filter df and add area_of_interest to the index
-    df_period_linear_fit_filtered = df_period_linear_fit_all.loc[st.session_state.df_unit_filtered.set_index(unit_key_names).index, :]
-    df_aoi_filtered = st.session_state.df['df_ephys_units'].set_index(unit_key_names).loc[df_period_linear_fit_filtered.index, :]
-    aoi_index = df_aoi_filtered.reset_index().set_index(unit_key_names + ['area_of_interest'])
-    df_period_linear_fit_filtered.index = aoi_index.index
-
     plotly_font = lambda x: dict(xaxis_tickfont_size=x,
                                 xaxis_title_font_size=x,
                                 yaxis_tickfont_size=x,
@@ -150,8 +183,6 @@ if __name__ == '__main__':
                                 legend_title_font_size=x,)
     
 
-        
-    # --- t-distribution, compare areas ---
     st.markdown('#### :red[Linear fitting t-values over time]')
 
     st.markdown(
@@ -164,15 +195,19 @@ if __name__ == '__main__':
     unsafe_allow_html=True,
     )
 
+    # --- 2. Settings ---
     cols = st.columns([1, 1, 1])
     
     selected_model = cols[0].selectbox('Linear model',
                                         list(models.keys()), 
                                         1,
                                        )
+    selected_align_to = cols[0].multiselect('Align to', 
+                                                align_tos,
+                                                ['go_cue', 'choice', 'iti_start'],
+                                                key=f'align_to_linear_fit_over_time')
 
     available_paras_this_model = models[selected_model]
-    
     
     selected_paras = cols[1].multiselect('Parameters',
                                          available_paras_this_model, 
@@ -180,19 +215,35 @@ if __name__ == '__main__':
                                           or p in ['reward', 'chosen_value', 'choice_this', 'choice_next', 'trial_normalized', 'firing_1_back']],
                                         )
     
-    selected_align_to = cols[2].multiselect('Align to', 
-                                                align_tos,
-                                                ['go_cue', 'choice', 'iti_start'],
-                                                key=f'align_to_linear_fit_over_time')
+    cc = cols[1].columns([1, 1])
+    selected_agg_func = cc[0].selectbox('Aggr func',
+                                        [r'% significant units', 'median abs()', 'mean abs()', 'median', 'mean'], 
+                                        0
+                                        )
+    if selected_agg_func != r'% significant units':
+        selected_para_stat = cc[1].selectbox('Statistic',
+                                            ds_linear_fit_over_time.para_stat.values, 
+                                            list(ds_linear_fit_over_time.para_stat).index('t'),
+                                            )
+    else:
+        selected_para_stat = 't'
+        sign_level = select_t_sign_level(col=cc[1])
         
+       
+    # --- 3. Plot ---
     if selected_model and selected_paras and selected_align_to:
         
         fig = plot_linear_fitting_over_time(ds=ds_linear_fit_over_time, 
                                             model=selected_model,
                                             paras=selected_paras,
-                                            align_tos=selected_align_to)
+                                            para_stat=selected_para_stat,
+                                            aggr_func=selected_agg_func,
+                                            align_tos=selected_align_to,
+                                            sync_y=cols[1].checkbox('Sync y-axis', True)
+        )
 
-        plotly_events(fig, override_height=fig.layout.height*1.1, override_width=fig.layout.width, click_event=False)
+        plotly_events(fig, override_height=fig.layout.height*1.1, 
+                      override_width=fig.layout.width, click_event=False)
         
     if if_debug:
         p.stop()
