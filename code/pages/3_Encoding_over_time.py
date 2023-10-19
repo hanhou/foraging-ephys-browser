@@ -57,8 +57,8 @@ def plot_linear_fitting_over_time(ds, model, paras, align_tos,
                         shared_xaxes=True,
                         vertical_spacing=0.03,
                         x_title='Time (s)', 
-                        column_widths=[col['win'][1] - col['win'][0] 
-                                       for col in plot_settings.values()]
+                        column_widths=[plot_settings[align_to]['win'][1] - plot_settings[align_to]['win'][0] 
+                                       for align_to in align_tos]
                         )
     
     progress_bar = st.columns([1, 15])[0].progress(0, text='0%')
