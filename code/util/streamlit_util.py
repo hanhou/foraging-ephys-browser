@@ -167,12 +167,16 @@ def filter_dataframe(df: pd.DataFrame) -> pd.DataFrame:
             left, right = st.columns((1, 20))
             # Treat columns with < 10 unique values as categorical
             if is_categorical_dtype(df[column]) or df[column].nunique() < 30:
-                right.markdown(f"Filter for **{column}**")
+                ll, rr = right.columns([5, 1])
+                ll.markdown(f"Filter for **{column}**")
+                select_all = rr.button('all', key=f'select_all_{column}')
                 selected = right.multiselect(
                     f"Values for {column}",
                     df[column].unique(),
                     label_visibility='collapsed',
-                    default=ss[f'select_{column}_cache']
+                    default=list(df[column].unique())
+                            if select_all
+                            else ss[f'select_{column}_cache']
                             if f'select_{column}_cache' in ss
                             else list(df[column].unique()),
                     key=f'select_{column}',
