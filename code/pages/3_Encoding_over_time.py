@@ -16,7 +16,7 @@ from util import *
 from util.selectors import (add_unit_filter, select_period, select_model, select_para)
 from Home import init, _to_theta_r, select_t_sign_level, t_to_p, p_to_t
 
-if_debug = True
+if_debug = False
 if if_debug:
     from streamlit_profiler import Profiler
     p = Profiler()
@@ -183,7 +183,7 @@ if __name__ == '__main__':
                                 legend_title_font_size=x,)
     
 
-    st.markdown('#### :red[Linear fitting t-values over time]')
+    st.markdown('#### :red[Linear fitting over time]')
 
     st.markdown(
     """
