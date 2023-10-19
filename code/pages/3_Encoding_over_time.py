@@ -23,9 +23,11 @@ if if_debug:
     p.start()
 
 primary_keys = ['subject_id', 'session', 'insertion_number', 'unit']
-plot_settings = {'go_cue': {'win': [-1, 3], 'others': [2]},  # Plot window and other time points
-                'choice': {'win': [-1, 3], 'others': [2]},
-                'iti_start': {'win': [-2.5, 6], 'others': [-2, 4.75]}
+plot_settings = {'go_cue': {'win': [-1, 3], 'others': {'iti_start (median)': 2}},  # Plot window and other time points
+                'choice': {'win': [-1, 3], 'others': {'iti_start (median)': 2}},
+                'iti_start': {'win': [-2.5, 6], 'others': {'iti_start (median)': -2,
+                                                           'next_trial_start (median)': 4.75}
+                             },
                 }
 
 area_aggr_func_mapping = {    
@@ -102,6 +104,8 @@ def plot_linear_fitting_over_time(ds, model, paras, align_tos,
                                             showlegend=col==0 and row ==0,
                                             hovertemplate=
                                                 '%s, n = %s<br>' % (area, n) +
+                                                '%s: %%{y:.4g}<br>'% (para) +
+                                                '%%{x} s @ %s<br>' % (align_to) +
                                                 '<extra></extra>',
                                             visible=True,
                                             ),
@@ -113,10 +117,13 @@ def plot_linear_fitting_over_time(ds, model, paras, align_tos,
                               line_dash='dash', line_color='black', line_width=1)
             
             # Add indicators for other time points
-            for other_time in plot_settings[align_to]['others']:
+            for other_name, other_time in plot_settings[align_to]['others'].items():
                 fig.add_vline(x=other_time, line_color='gray', line_dash='dash',
-                                row=row+1, col=col+1)
-            
+                              row=row+1, col=col+1)
+            fig.add_vline(x=0, line_color='black', line_dash='solid',
+                            name=align_to,
+                            row=row+1, col=col+1)
+                            
             finished = (col * len(paras) + row + 1) / (len(align_tos) * len(paras))
             progress_bar.progress(finished, text=f'{finished:.0%}')
             
