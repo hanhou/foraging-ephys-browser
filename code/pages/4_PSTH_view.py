@@ -55,7 +55,7 @@ def plot_population_tuning(df_all, meta, if_flip_tuning=True, significance_level
                 add_plotly_errorbar(x=tuning_mean.index, 
                                     y=tuning_mean, 
                                     err=tuning_sem, 
-                                    col=st.session_state.aoi_color_mapping[aoi],
+                                    color=st.session_state.aoi_color_mapping[aoi],
                                     hovertemplate=  '%s' % (aoi) +
                                                     '<br>n = %s' % (len(selected_tuning)) +
                                                     '<extra></extra>',
@@ -75,7 +75,7 @@ def plot_population_tuning(df_all, meta, if_flip_tuning=True, significance_level
                     add_plotly_errorbar(x=tuning_mean.index, 
                                         y=tuning_mean, 
                                         err=tuning_sem, 
-                                        col=st.session_state.aoi_color_mapping[aoi],
+                                        color=st.session_state.aoi_color_mapping[aoi],
                                         hovertemplate=  '%s' % (aoi) +
                                                         '<br>n = %s' % (len(selected_tuning)) +
                                                         '<extra></extra>',
@@ -95,7 +95,7 @@ def plot_population_tuning(df_all, meta, if_flip_tuning=True, significance_level
                 add_plotly_errorbar(x=tuning_mean.index, 
                                     y=tuning_mean, 
                                     err=tuning_sem, 
-                                    col=st.session_state.aoi_color_mapping[aoi], 
+                                    color=st.session_state.aoi_color_mapping[aoi], 
                                     fig=fig, alpha=0.2, name=f'{aoi}_{choice}', legend_group=f'group_{aoi}',
                                     hovertemplate=  '%s' % (aoi) +
                                         '<br>n = %s' % (len(selected_tuning)) +

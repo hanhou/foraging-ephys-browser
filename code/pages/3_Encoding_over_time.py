@@ -15,6 +15,7 @@ import extra_streamlit_components as stx
 from util import *
 from util.selectors import (add_unit_filter, select_period, select_model, select_para)
 from Home import init, _to_theta_r, select_t_sign_level, t_to_p, p_to_t
+from util.plotly_util import add_plotly_errorbar
 
 if_debug = False
 if if_debug:
@@ -49,7 +50,8 @@ def _get_data_from_zarr(ds, var_name, model, para_stat):
     
 def plot_linear_fitting_over_time(ds, model, paras, align_tos,
                                   para_stat='t', aggr_func='median',
-                                  sync_y=True):
+                                  if_95_CI=True,
+                                  if_sync_y=True):
     
     fig = make_subplots(rows=len(paras), cols=len(align_tos), 
                         subplot_titles=align_tos,
@@ -95,21 +97,40 @@ def plot_linear_fitting_over_time(ds, model, paras, align_tos,
                 # Apply aggregation function
                 y = area_aggr_func_mapping[aggr_func](data_this)
                 
-                fig.add_trace(go.Scattergl(x=ts, 
-                                            y=y,
-                                            mode='lines',
-                                            line=dict(color=color),
-                                            name=area,
-                                            legendgroup=area,
-                                            showlegend=col==0 and row ==0,
-                                            hovertemplate=
-                                                '%s, n = %s<br>' % (area, n) +
-                                                '%s: %%{y:.4g}<br>'% (para) +
-                                                '%%{x} s @ %s<br>' % (align_to) +
-                                                '<extra></extra>',
-                                            visible=True,
-                                            ),
-                            row=row+1, col=col+1)
+                if not if_95_CI:
+                    fig.add_trace(go.Scattergl(x=ts, 
+                                                y=y,
+                                                mode='lines',
+                                                line=dict(color=color),
+                                                name=area,
+                                                legendgroup=area,
+                                                showlegend=col==0 and row ==0,
+                                                hovertemplate=
+                                                    '%s, n = %s<br>' % (area, n) +
+                                                    '%s: %%{y:.4g}<br>'% (para) +
+                                                    '%%{x} s @ %s<br>' % (align_to) +
+                                                    '<extra></extra>',
+                                                visible=True,
+                                                ),
+                                row=row+1, col=col+1)
+                else:   
+                    binomial_95_CI = np.sqrt(y/100*(1-y/100)/n)*100 * 1.96  # 95% confidence interval
+                    add_plotly_errorbar(x=pd.Series(ts), 
+                                        y=pd.Series(y),
+                                        err=pd.Series(binomial_95_CI), 
+                                        color=color,
+                                        name=area,
+                                        mode='lines',
+                                        showlegend=col==0 and row ==0,
+                                        hovertemplate=
+                                            '%s, n = %s<br>' % (area, n) +
+                                            '%s: %%{y:.4g}<br>'% (para) +
+                                            '%%{x} s @ %s<br>' % (align_to) +
+                                            '<extra></extra>',
+                                        visible=True,
+                                        fig=fig, alpha=0.4, 
+                                        subplot_specs=dict(col=col+1, row=row+1)
+                                        )
 
             # Add type I error
             if aggr_func == r'% significant units':
@@ -130,7 +151,7 @@ def plot_linear_fitting_over_time(ds, model, paras, align_tos,
         # set x range
         fig.update_xaxes(range=plot_settings[align_to]['win'], row=row+1, col=col+1)   
         
-        if sync_y:
+        if if_sync_y:
             y_min = 0
             y_max = 0
             for data in fig.data:
@@ -145,10 +166,10 @@ def plot_linear_fitting_over_time(ds, model, paras, align_tos,
         fig['layout'][f'yaxis{1 + row * len(align_tos)}']['title'] = para
 
     # fig.update_traces(line_width=3)
-    fig.update_layout(width=min(2000, 400 + 300 * len(align_tos)), 
-                      height=200 + 240 * len(paras),
+    fig.update_layout(width=min(2000, 600 + 300 * len(align_tos)), 
+                      height=200 + 400 * len(paras),
                      font_size=17, hovermode='closest',
-                     title= f'{aggr_func} {f"(p < {t_to_p(sign_level):.2g})" if aggr_func == r"% significant units" else "of {para_stat}"}' 
+                     title= f'{aggr_func} {f"(p < {t_to_p(sign_level):.2g})" if aggr_func == r"% significant units" else f"of {para_stat}"}' 
                             f' (N = {len(df_unit_keys_filtered_and_with_aoi)})' +
                             f'',
                      title_x=0.01,
@@ -349,7 +370,10 @@ if __name__ == '__main__':
         else:
             selected_para_stat = 't'
             sign_level = select_t_sign_level(col=cc[1])
-            
+        
+        colss = cols[1].columns([1, 1, 1])    
+        if_95_CI = colss[0].checkbox('95% CI', True)
+        if_sync_y = colss[1].checkbox('Sync y-axis', True)
         
         # --- 3. Plot ---
         if selected_model and selected_paras and selected_align_to:
@@ -360,7 +384,8 @@ if __name__ == '__main__':
                                                 para_stat=selected_para_stat,
                                                 aggr_func=selected_agg_func,
                                                 align_tos=selected_align_to,
-                                                sync_y=cols[1].checkbox('Sync y-axis', True)
+                                                if_sync_y=if_sync_y,
+                                                if_95_CI=if_95_CI,
             )
 
             plotly_events(fig, override_height=fig.layout.height*1.1, 
