@@ -157,8 +157,124 @@ def plot_linear_fitting_over_time(ds, model, paras, align_tos,
         
     return fig
     
-    pass
+
+def plot_beta_auto_corr(ds, model, align_tos, paras,
+                        down_sample_t=2,
+                        sync_y=False):
     
+    fig = make_subplots(rows=len(paras), cols=len(align_tos), 
+                        subplot_titles=align_tos,
+                        vertical_spacing=0.05,
+                        horizontal_spacing=0.2,
+                        x_title='Time (s)', 
+                        )
+    
+    progress_bar = st.columns([1, 15])[0].progress(0, text='0%')
+    
+    # Retrieve unit_keys from dataset
+    df_unit_keys = ds[primary_keys].to_dataframe().reset_index()
+    df_filtered_unit_with_aoi = st.session_state.df_unit_filtered[primary_keys + ['area_of_interest']]
+    
+    # Add aoi to df_unit_keys; right join to apply the filtering
+    df_unit_keys_filtered_and_with_aoi = df_unit_keys.merge(df_filtered_unit_with_aoi, on=primary_keys, how='right') 
+       
+    for col, align_to in enumerate(align_tos):
+        var_name = f'linear_fit_para_stats_aligned_to_{align_to}'
+        t_name = f'linear_fit_t_center_aligned_to_{align_to}'
+        ts = ds[t_name].values[::down_sample_t]
+         
+        betas = _get_data_from_zarr(ds, var_name, model, 'beta')
+            
+        for row, para in enumerate(paras):
+                        
+            # compute correlation matrix
+            betas_down_sample = betas[:, ::down_sample_t, list(ds.para).index(para)]
+            corr_matrix = np.corrcoef(betas_down_sample.T)
+            np.fill_diagonal(corr_matrix, np.nan)  # Remove diagonal
+            max_val = np.nanmax(np.abs(corr_matrix))
+            
+            fig.add_trace(go.Heatmap(
+                                    z=corr_matrix,
+                                    zmin=-max_val, 
+                                    zmax=max_val,
+                                    x=ts,
+                                    y=ts,
+                                    colorscale='RdBu_r',
+                                    # colorbar_title="corr of betas",
+                                    colorbar=dict(len=1/len(paras)*0.5, 
+                                                x=col/len(align_tos)*1.2 + 0.25,
+                                                y=row/len(paras) + 0.1,
+                                                ),
+                                    ),
+                           row=row+1, col=col+1,
+                         )
+              
+            # Add indicators for other time points
+            for other_name, other_time in plot_settings[align_to]['others'].items():
+                fig.add_shape(
+                        type="line",
+                        x0=other_time, x1=other_time, 
+                        y0=plot_settings[align_to]['win'][0], y1=plot_settings[align_to]['win'][1],
+                        line=dict(color="black", dash='dash'),
+                        row=row+1, col=col+1,
+                    )
+                fig.add_shape(
+                        type="line",
+                        x0=plot_settings[align_to]['win'][0], x1=plot_settings[align_to]['win'][1],
+                        y0=other_time, y1=other_time, 
+                        line=dict(color="black", dash='dash'),
+                        row=row+1, col=col+1,
+                    )
+            fig.add_shape(
+                    type="line",
+                    x0=0, x1=0, 
+                    y0=plot_settings[align_to]['win'][0], y1=plot_settings[align_to]['win'][1],
+                    line=dict(color="black", dash='solid'),
+                    row=row+1, col=col+1,
+                )
+            fig.add_shape(
+                    type="line",
+                    x0=plot_settings[align_to]['win'][0], x1=plot_settings[align_to]['win'][1],
+                    y0=0, y1=0, 
+                    line=dict(color="black", dash='solid'),
+                    row=row+1, col=col+1,
+                )               
+                           
+            finished = (col * len(paras) + row + 1) / (len(align_tos) * len(paras))
+            progress_bar.progress(finished, text=f'{finished:.0%}')
+            
+            # set plot range
+            fig.update_xaxes(range=plot_settings[align_to]['win'], row=row+1, col=col+1)  
+            fig.update_yaxes(range=plot_settings[align_to]['win'], row=row+1, col=col+1) 
+        
+        if sync_y:
+            y_min = 0
+            y_max = 0
+            for data in fig.data:
+                y_min = min(y_min, np.nanmin(data.y))
+                y_max = max(y_max, np.nanmax(data.y))
+            
+            for row in range(len(paras)):
+                fig.update_yaxes(range=[y_min, y_max * 1.1], row=row+1, col=col+1)
+
+
+    for row, para in enumerate(paras):
+        fig['layout'][f'yaxis{1 + row * len(align_tos)}']['title'] = para
+
+    # fig.update_traces(line_width=3)
+    fig.update_layout(width=min(2000, 400 + 300 * len(align_tos)), 
+                      height=300 + 290 * len(paras),
+                     font_size=17, hovermode='closest',
+                     title= f'Autocorrelation of betas' 
+                            f' (N = {len(df_unit_keys_filtered_and_with_aoi)})' +
+                            f'',
+                     title_x=0.01,
+                     )
+    fig.update_annotations(font_size=20)
+        
+    return fig
+
+
 
 if __name__ == '__main__':
 
@@ -171,6 +287,7 @@ if __name__ == '__main__':
     
     # --- 1. Fetch zarr ---
     try:   # Try local first (if in CO)
+        assert 0
         zarr_store = '/root/capsule/data/datajoint_psth_linear_fit_over_timeall_linear_fit_over_time.zarr'
         ds_linear_fit_over_time = xr.open_zarr(zarr_store, consolidated=True)
     except:  # Else, from s3
@@ -189,68 +306,106 @@ if __name__ == '__main__':
                                 legend_font_size=x,
                                 legend_title_font_size=x,)
     
-
-    st.markdown('#### :red[Linear fitting over time]')
-
-    st.markdown(
-    """
-    <style>
-        .stMultiSelect [data-baseweb=select] span{
-            max-width: 1000px;
-        }
-    </style>""",
-    unsafe_allow_html=True,
-    )
-
-    # --- 2. Settings ---
-    cols = st.columns([1, 1, 1])
+    st.markdown('### Select a tab here 👇')
+    chosen_id = stx.tab_bar(data=[
+                                stx.TabBarItemData(id="tab1", title="1. Fitting stats", description=""),
+                                stx.TabBarItemData(id="tab2", title="2. Coding directions", description=""),
+                                ], 
+                            default="tab2")
     
-    selected_model = cols[0].selectbox('Linear model',
-                                        list(models.keys()), 
-                                        1,
-                                       )
-    selected_align_to = cols[0].multiselect('Align to', 
-                                                align_tos,
-                                                ['go_cue', 'choice', 'iti_start'],
-                                                key=f'align_to_linear_fit_over_time')
+    if chosen_id == 'tab1':
+        st.markdown('#### :red[Linear fitting over time]')
 
-    available_paras_this_model = models[selected_model]
-    
-    selected_paras = cols[1].multiselect('Parameters',
-                                         available_paras_this_model, 
-                                         [p for p in available_paras_this_model if 'Q' in p 
-                                          or p in ['reward', 'chosen_value', 'choice_this', 'choice_next', 'trial_normalized', 'firing_1_back']],
-                                        )
-    
-    cc = cols[1].columns([1, 1])
-    selected_agg_func = cc[0].selectbox('Aggr func',
-                                        [r'% significant units', 'median abs()', 'mean abs()', 'median', 'mean'], 
-                                        0
-                                        )
-    if selected_agg_func != r'% significant units':
-        selected_para_stat = cc[1].selectbox('Statistic',
-                                            ds_linear_fit_over_time.para_stat.values, 
-                                            list(ds_linear_fit_over_time.para_stat).index('t'),
-                                            )
-    else:
-        selected_para_stat = 't'
-        sign_level = select_t_sign_level(col=cc[1])
-        
-       
-    # --- 3. Plot ---
-    if selected_model and selected_paras and selected_align_to:
-        
-        fig = plot_linear_fitting_over_time(ds=ds_linear_fit_over_time, 
-                                            model=selected_model,
-                                            paras=selected_paras,
-                                            para_stat=selected_para_stat,
-                                            aggr_func=selected_agg_func,
-                                            align_tos=selected_align_to,
-                                            sync_y=cols[1].checkbox('Sync y-axis', True)
+        st.markdown(
+        """
+        <style>
+            .stMultiSelect [data-baseweb=select] span{
+                max-width: 1000px;
+            }
+        </style>""",
+        unsafe_allow_html=True,
         )
 
+        # --- 2. Settings ---
+        cols = st.columns([1, 1, 1])
+        
+        selected_model = cols[0].selectbox('Linear model',
+                                            list(models.keys()), 
+                                            1,
+                                        )
+        selected_align_to = cols[0].multiselect('Align to', 
+                                                    align_tos,
+                                                    ['go_cue', 'choice', 'iti_start'],
+                                                    key=f'align_to_linear_fit_over_time')
+
+        available_paras_this_model = models[selected_model]
+        
+        selected_paras = cols[1].multiselect('Parameters',
+                                            available_paras_this_model, 
+                                            [p for p in available_paras_this_model if 'Q' in p 
+                                            or p in ['reward', 'chosen_value', 'choice_this', 'choice_next', 'trial_normalized', 'firing_1_back']],
+                                            )
+        
+        cc = cols[1].columns([1, 1])
+        selected_agg_func = cc[0].selectbox('Aggr func',
+                                            [r'% significant units', 'median abs()', 'mean abs()', 'median', 'mean'], 
+                                            0
+                                            )
+        if selected_agg_func != r'% significant units':
+            selected_para_stat = cc[1].selectbox('Statistic',
+                                                ds_linear_fit_over_time.para_stat.values, 
+                                                list(ds_linear_fit_over_time.para_stat).index('t'),
+                                                )
+        else:
+            selected_para_stat = 't'
+            sign_level = select_t_sign_level(col=cc[1])
+            
+        
+        # --- 3. Plot ---
+        if selected_model and selected_paras and selected_align_to:
+            
+            fig = plot_linear_fitting_over_time(ds=ds_linear_fit_over_time, 
+                                                model=selected_model,
+                                                paras=selected_paras,
+                                                para_stat=selected_para_stat,
+                                                aggr_func=selected_agg_func,
+                                                align_tos=selected_align_to,
+                                                sync_y=cols[1].checkbox('Sync y-axis', True)
+            )
+
+            plotly_events(fig, override_height=fig.layout.height*1.1, 
+                        override_width=fig.layout.width, click_event=False)
+            
+    elif chosen_id == 'tab2':        
+        cols = st.columns([1, 1, 1])
+        selected_model = cols[0].selectbox('Linear model',
+                                            list(models.keys()), 
+                                            1,
+                                        )
+        selected_align_to = cols[0].multiselect('Align to', 
+                                                    align_tos,
+                                                    ['go_cue', 'choice', 'iti_start'],
+                                                    key=f'align_to_linear_fit_over_time')
+
+        available_paras_this_model = models[selected_model]
+        
+        selected_paras = cols[1].multiselect('Parameters',
+                                            available_paras_this_model, 
+                                            [p for p in available_paras_this_model if 'Q' in p 
+                                            or p in ['reward', 'chosen_value', 'choice_this', 'choice_next', 'trial_normalized', 'firing_1_back']],
+                                            )
+        
+        align_to = selected_align_to[0]        
+
+        fig = plot_beta_auto_corr(ds=ds_linear_fit_over_time, 
+                                  model=selected_model, 
+                                  paras=selected_paras, 
+                                  align_tos=selected_align_to)
+        
         plotly_events(fig, override_height=fig.layout.height*1.1, 
-                      override_width=fig.layout.width, click_event=False)
+                        override_width=fig.layout.width, click_event=False)
+        
+            
         
     if if_debug:
         p.stop()
