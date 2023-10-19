@@ -63,7 +63,6 @@ def plot_linear_fitting_over_time(ds, model, paras, align_tos,
                                        for align_to in align_tos]
                         )
     
-    progress_bar = st.columns([1, 15])[0].progress(0, text='0%')
     
     # Retrieve unit_keys from dataset
     df_unit_keys = ds[primary_keys].to_dataframe().reset_index()
@@ -71,7 +70,12 @@ def plot_linear_fitting_over_time(ds, model, paras, align_tos,
     
     # Add aoi to df_unit_keys; right join to apply the filtering
     df_unit_keys_filtered_and_with_aoi = df_unit_keys.merge(df_filtered_unit_with_aoi, on=primary_keys, how='right') 
-       
+           
+    progress_bar = st.columns([1, 15])[0].progress(0, text='0%')
+    st.markdown(f'##### {aggr_func} {f"(p < {t_to_p(sign_level):.2g})" if aggr_func == r"% significant units" else f"of {para_stat}"}' 
+                f' (N = {len(df_unit_keys_filtered_and_with_aoi)}, sliding window width = {win_width:.2g} s, step = {win_step:.2g} s)' +
+                f'')
+    
     for col, align_to in enumerate(align_tos):
         var_name = f'linear_fit_para_stats_aligned_to_{align_to}'
         t_name = f'linear_fit_t_center_aligned_to_{align_to}'
@@ -161,17 +165,13 @@ def plot_linear_fitting_over_time(ds, model, paras, align_tos,
             for row in range(len(paras)):
                 fig.update_yaxes(range=[y_min, y_max * 1.1], row=row+1, col=col+1)
 
-
     for row, para in enumerate(paras):
         fig['layout'][f'yaxis{1 + row * len(align_tos)}']['title'] = para
-
+            
     # fig.update_traces(line_width=3)
     fig.update_layout(width=min(2000, 600 + 300 * len(align_tos)), 
                       height=200 + 400 * len(paras),
                      font_size=17, hovermode='closest',
-                     title= f'{aggr_func} {f"(p < {t_to_p(sign_level):.2g})" if aggr_func == r"% significant units" else f"of {para_stat}"}' 
-                            f' (N = {len(df_unit_keys_filtered_and_with_aoi)})' +
-                            f'',
                      title_x=0.01,
                      )
     fig.update_annotations(font_size=20)
@@ -195,7 +195,8 @@ def plot_beta_auto_corr(ds, model, align_tos, paras,
     df_unit_keys_filtered_and_with_aoi = df_unit_keys.merge(df_filtered_unit_with_aoi, on=primary_keys, how='right') 
     unit_ind_filtered = df_unit_keys_filtered_and_with_aoi.unit_ind
     
-    st.markdown(f'##### (N = {len(df_unit_keys_filtered_and_with_aoi)})')
+    st.markdown(f'##### (N = {len(df_unit_keys_filtered_and_with_aoi)}, '
+                f'sliding window width = {win_width:.2g} s, step = {win_step:.2g} s)')
     
     figs = [[None for _ in range(len(paras))] for _ in range(len(align_tos))]
     
@@ -310,6 +311,10 @@ if __name__ == '__main__':
     align_tos = ds_linear_fit_over_time.align_tos
     models = ds_linear_fit_over_time.linear_models
     
+    win_width = ds_linear_fit_over_time['linear_fit_para_stats_aligned_to_choice'].win_width
+    win_step = ds_linear_fit_over_time['linear_fit_t_center_aligned_to_choice'][1].values\
+             - ds_linear_fit_over_time['linear_fit_t_center_aligned_to_choice'][0].values
+    
     plotly_font = lambda x: dict(xaxis_tickfont_size=x,
                                 xaxis_title_font_size=x,
                                 yaxis_tickfont_size=x,
@@ -322,7 +327,7 @@ if __name__ == '__main__':
                                 stx.TabBarItemData(id="tab1", title="1. Fitting stats", description=""),
                                 stx.TabBarItemData(id="tab2", title="2. Coding directions", description=""),
                                 ], 
-                            default="tab2")
+                            default="tab1")
     
     if chosen_id == 'tab1':
         st.markdown('#### :red[Linear fitting over time]')
@@ -371,7 +376,7 @@ if __name__ == '__main__':
             selected_para_stat = 't'
             sign_level = select_t_sign_level(col=cc[1])
         
-        colss = cols[1].columns([1, 1, 1])    
+        colss = cols[0].columns([1, 1, 1])    
         if_95_CI = colss[0].checkbox('95% CI', True)
         if_sync_y = colss[1].checkbox('Sync y-axis', True)
         
@@ -409,13 +414,16 @@ if __name__ == '__main__':
                                             [p for p in available_paras_this_model if 'Q' in p 
                                             or p in ['reward', 'chosen_value', 'choice_this', 'choice_next', 'trial_normalized', 'firing_1_back']],
                                             )
+        down_sample_t = cols[1].columns([1, 3])[0].slider('Down sample',
+                                       1, 5, 1, 1)
         
         align_to = selected_align_to[0]        
 
         plot_beta_auto_corr(ds=ds_linear_fit_over_time, 
                                   model=selected_model, 
                                   paras=selected_paras, 
-                                  align_tos=selected_align_to)
+                                  align_tos=selected_align_to,
+                                  down_sample_t=down_sample_t)
         
     if if_debug:
         p.stop()
