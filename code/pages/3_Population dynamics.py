@@ -377,7 +377,15 @@ def plot_psth_proj_on_CDs(
 
             # Compute projection
             psth, psth_t, psth_group_names, psth_plot_specs = _get_psth(psth_name, psth_align_to, psth_grouped_by)
-            psth_proj = (psth.reshape(psth.shape[0], -1).T @ coding_direction).reshape(psth.shape[1:])
+            
+            #   Handle PSTHs with some nan values
+            psth_reshaped = psth.reshape(psth.shape[0], -1)
+            nan_idx = np.any(np.isnan(psth_reshaped), axis=1)
+            psth_reshaped_valid = psth_reshaped[~nan_idx]
+            coding_direction_valid = coding_direction[~nan_idx]  # Remove nan units (temporary fix)
+            coding_direction_valid = coding_direction_valid / np.sqrt(np.sum(coding_direction_valid**2)) # Renormalize
+            
+            psth_proj = (psth_reshaped_valid.T @ coding_direction_valid).reshape(psth.shape[1:])
 
             # Do plotting
             fig = go.Figure()            
