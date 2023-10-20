@@ -328,10 +328,11 @@ def plot_psth_proj_on_CDs(
                      paras, psth_grouped_bys,
                      combine_araes=True,
                     ):
-        
+    
+    
     for para in paras:  # Iterate over rows
         
-        cols = st.columns([0.4] + [1] * len(psth_grouped_bys))    
+        cols = st.columns([0.6] + [1] * len(psth_grouped_bys), gap="medium")    
         
         # Select time epoch for computing coding direction
         cols[0].markdown(f'### {para}')
@@ -389,29 +390,44 @@ def plot_psth_proj_on_CDs(
                                         ),
                               )
             
-            fig.update_layout(width=600,
-                              font_size=17, hovermode='closest',
-                              title_x=0.01,
-                              xaxis=dict(title=f'Time to {psth_align_to} (sec)'),
+            fig.update_layout(
+                              font_size=17, 
+                              hovermode='closest',
+                              xaxis=dict(title=f'Time to {psth_align_to} (sec)',
+                                         title_font_size=20,
+                                         tickfont_size=20),
                               yaxis=dict(visible=False),
                               legend=dict(
                                 yanchor="top", y=1.3,
                                 xanchor="left", x=0,
                                 orientation="h",
-                                font_size=11,
+                                font_size=15,
                               ),
                               )
+            
+            fig.for_each_xaxis(lambda x: x.update(showgrid=True))
+            
+            # Add indicators for other time points
+            for other_name, other_time in plot_settings[psth_align_to]['others'].items():
+                fig.add_vline(x=other_time, line_color='black', line_dash='dash',
+                              name=psth_align_to)
+                
+            fig.add_vline(x=0, line_color='black', line_dash='solid',
+                          name=psth_align_to)
+
             
             # Increase line width for all scatter traces
             for trace in fig.data:
                 if trace.type == 'scatter' and 'line' in dir(trace):
-                    if trace.line.width is not None:
+                    if trace.line.width is None:
+                        trace.line.width = 2
+                    else:
                         trace.line.width = trace.line.width + 1
         
             with cols[i+1]:
-                plotly_events(fig,
-                            #   override_width='100%',
-                              click_event=False)
+                st.plotly_chart(fig,
+                                use_container_width=True,
+                               )
             
 
 if __name__ == '__main__':
