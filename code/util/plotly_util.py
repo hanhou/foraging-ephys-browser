@@ -3,7 +3,7 @@ import plotly.graph_objects as go
 
 def add_plotly_errorbar(x, y, err, color, fig, alpha=0.2, name='', 
                         mode=None,
-                        legend_group=None, subplot_specs=None, **kwargs):
+                        legend_group=None, subplot_specs={}, **kwargs):
     if legend_group is None:
         legend_group = f'group_{name}'
         
