@@ -300,9 +300,10 @@ def plot_beta_auto_corr(ds, model, align_tos, paras,
 def _get_psth(psth_name, align_to, psth_grouped_by, select_units):
     t_range = {f't_to_{align_to}': slice(*plot_settings[align_to]['win'])}
     
-    mean_psth = ds_psth[psth_name].sel(stat='mean', 
-                                       unit_ind=select_units,
-                                       **t_range).values
+    psth_mean, psth_sem = ds_psth[psth_name].sel(stat=['mean', 'sem'], 
+                                                unit_ind=select_units,
+                                                **t_range).values   
+    
     ts = ds_psth[f't_to_{align_to}'].sel(**t_range).values
     group_name = ds_psth[f'psth_groups_{psth_grouped_by}'].values
     
@@ -310,7 +311,7 @@ def _get_psth(psth_name, align_to, psth_grouped_by, select_units):
     if 'reward' in psth_grouped_by:  # Bug fix
         plot_spec = plot_spec[[1, 0, 3, 2]]
     
-    return [mean_psth, ts, group_name, plot_spec]
+    return [psth_mean, psth_sem, ts, group_name, plot_spec]
     
 @st.cache_data(ttl=60*60*24)
 def _get_coding_direction(model, para, align_to, beta_aver_epoch, select_units):
@@ -327,24 +328,36 @@ def _get_coding_direction(model, para, align_to, beta_aver_epoch, select_units):
     return aver_betas / np.sqrt(np.sum(aver_betas**2))
 
 
-def compute_psth_proj_on_CD(psth, coding_direction):
-    #   Handle PSTHs with some nan values
+def compute_psth_proj_on_CD(psth, psth_sem, coding_direction, if_error_bar):
+    # Handle PSTHs with some nan values
     psth_reshaped = psth.reshape(psth.shape[0], -1)
+    psth_sem_reshaped = psth_sem.reshape(psth_sem.shape[0], -1)
     nan_idx = np.any(np.isnan(psth_reshaped), axis=1)
+    
     psth_reshaped_valid = psth_reshaped[~nan_idx]
+    psth_sem_reshaped_valid = psth_sem_reshaped[~nan_idx]
+    
     coding_direction_valid = coding_direction[~nan_idx]  # Remove nan units (temporary fix)
     coding_direction_valid = coding_direction_valid / np.sqrt(np.sum(coding_direction_valid**2)) # Renormalize
     
     # Do projection
     psth_proj = (psth_reshaped_valid.T @ coding_direction_valid).reshape(psth.shape[1:])
     
-    return psth_proj
+    if not if_error_bar:
+        return psth_proj, None
+    
+    # Compute 95% CI from psth_sem (assuming uncertainties all come from psth, not betas; also, I didn't take care of the trial number, since Var = SEM^2 * trial_num)
+    psth_proj_sem = np.sqrt((psth_sem_reshaped_valid.T**2 @ coding_direction_valid**2)).reshape(psth_sem.shape[1:])
+    psth_proj_95CI = 1.96 * psth_proj_sem
+        
+    return psth_proj, psth_proj_95CI
 
 
 def plot_psth_proj_on_CDs(
                      model, psth_align_to,
                      paras, psth_grouped_bys,
                     #  combine_araes=True,
+                    if_error_bar=False,
                     ):
 
     # Retrieve unit_keys from dataset
@@ -411,40 +424,66 @@ def plot_psth_proj_on_CDs(
                         f'''{psth_align_mapping[psth_align_to]}_''' +\
                         f'''grouped_by_{psth_grouped_by}'''
 
-            psth, psth_t, psth_group_names, psth_plot_specs = _get_psth(psth_name=psth_name, 
-                                                                        align_to=psth_align_to, 
-                                                                        psth_grouped_by=psth_grouped_by,
-                                                                        select_units=unit_ind_filtered.values,
-                                                                        )
+            psth, psth_sem, psth_t, psth_group_names, psth_plot_specs = _get_psth(psth_name=psth_name, 
+                                                                            align_to=psth_align_to, 
+                                                                            psth_grouped_by=psth_grouped_by,
+                                                                            select_units=unit_ind_filtered.values,
+                                                                            )
             
             # Compute projection
-            psth_proj = compute_psth_proj_on_CD(psth, coding_direction)
+            psth_proj, psth_proj_95CI = compute_psth_proj_on_CD(psth=psth, 
+                                                                          psth_sem=psth_sem,
+                                                                          coding_direction=coding_direction, 
+                                                                          if_error_bar=if_error_bar)
             
             # Do plotting
             fig = go.Figure()            
             for i_group in range(psth_proj.shape[0]):
-                fig.add_trace(go.Scatter(x=psth_t, 
-                                        y=psth_proj[i_group, :],
-                                        mode='lines', 
+                
+                if not if_error_bar:
+                    fig.add_trace(go.Scatter(x=psth_t, 
+                                            y=psth_proj[i_group, :],
+                                            mode='lines', 
+                                            name=psth_group_names[i_group],
+                                            **eval(psth_plot_specs[i_group]),
+                                            ),
+                                )
+                else:
+                    # Hack of the dash and line width
+                    line_spec = eval(psth_plot_specs[i_group])
+                    if 'line_dash' in line_spec:
+                        line_dash = line_spec['line_dash']
+                        line_width = 2 if line_dash == 'dot' else 3
+                    else:
+                        line_dash = 'solid'
+                        line_width = 3
+                    
+                    add_plotly_errorbar(x=pd.Series(psth_t), 
+                                        y=pd.Series(psth_proj[i_group, :]),
+                                        err=pd.Series(psth_proj_95CI[i_group, :]), 
+                                        color=eval(psth_plot_specs[i_group])['marker_color'],
+                                        line_dash=line_dash,
+                                        line_width=line_width,
                                         name=psth_group_names[i_group],
-                                        **eval(psth_plot_specs[i_group]),
-                                        ),
-                              )
+                                        mode='lines',
+                                        fig=fig, alpha=0.2, 
+                                        )            
             
             fig.update_layout(
-                              font_size=17, 
-                              hovermode='closest',
-                              xaxis=dict(title=f'Time to {psth_align_to} (sec)',
-                                         title_font_size=20,
-                                         tickfont_size=20),
-                              yaxis=dict(visible=False),
-                              legend=dict(
+                            font_size=17, 
+                            hovermode='closest',
+                            xaxis=dict(title=f'Time to {psth_align_to} (sec)',
+                                        title_font_size=20,
+                                        tickfont_size=20),
+                            yaxis=dict(visible=False),
+                            legend=dict(
                                 yanchor="top", y=1.3,
                                 xanchor="left", x=0,
                                 orientation="h",
                                 font_size=15,
-                              ),
-                              )
+                            ),
+                            )
+
             
             fig.for_each_xaxis(lambda x: x.update(showgrid=True))
             
@@ -458,12 +497,12 @@ def plot_psth_proj_on_CDs(
 
             
             # Increase line width for all scatter traces
-            for trace in fig.data:
-                if trace.type == 'scatter' and 'line' in dir(trace):
-                    if trace.line.width is None:
-                        trace.line.width = 2
-                    else:
-                        trace.line.width = trace.line.width + 1
+            # for trace in fig.data:
+            #     if trace.type == 'scatter' and 'line' in dir(trace):
+            #         if trace.line.width is None:
+            #             trace.line.width = 2
+            #         else:
+            #             trace.line.width = trace.line.width + 1
         
             with cols[i+1]:
                 st.plotly_chart(fig,
@@ -629,6 +668,7 @@ if __name__ == '__main__':
                         
         available_paras_this_model = models[selected_model]
         # if_combine_araes = cols[0].checkbox('Combine areas', True)
+        if_error_bar = cols[0].checkbox('Show 95% CI', True)
         
         selected_paras = cols[1].multiselect('Coding directions',
                                             coding_direction_beta_aver_epoch.keys(), 
@@ -653,6 +693,7 @@ if __name__ == '__main__':
                         paras=selected_paras,
                         psth_grouped_bys=selected_grouped_bys,
                         # combine_araes=if_combine_araes
+                        if_error_bar=if_error_bar,
                         )        
 
                  
