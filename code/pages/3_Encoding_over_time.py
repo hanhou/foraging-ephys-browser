@@ -303,7 +303,7 @@ if __name__ == '__main__':
         zarr_store = '/root/capsule/data/datajoint_psth_linear_fit_over_timeall_linear_fit_over_time.zarr'
         ds_linear_fit_over_time = xr.open_zarr(zarr_store, consolidated=True)
     except:  # Else, from s3
-        s3_path = f's3://aind-behavior-data/Han/ephys/export/psth/all_linear_fit_over_time.zarr'
+        s3_path = f's3://aind-behavior-data/Han/ephys/export/psth/datajoint_psth_combined/all_linear_fit_over_time.zarr'
         fs = s3fs.S3FileSystem(anon=False)
         zarr_store = s3fs.S3Map(root=s3_path, s3=fs, check=True)
         ds_linear_fit_over_time = xr.open_zarr(zarr_store, consolidated=True)
@@ -326,8 +326,9 @@ if __name__ == '__main__':
     chosen_id = stx.tab_bar(data=[
                                 stx.TabBarItemData(id="tab1", title="1. Fitting stats", description=""),
                                 stx.TabBarItemData(id="tab2", title="2. Coding directions", description=""),
-                                ], 
-                            default="tab1")
+                                stx.TabBarItemData(id="tab3", title="3. Projection on CDs", description=""),
+                        ], 
+                        default="tab3")
     
     if chosen_id == 'tab1':
         st.markdown('#### :red[Linear fitting over time]')
@@ -424,6 +425,9 @@ if __name__ == '__main__':
                                   paras=selected_paras, 
                                   align_tos=selected_align_to,
                                   down_sample_t=down_sample_t)
+    
+    elif chosen_id == 'tab3':
+        pass
         
     if if_debug:
         p.stop()
