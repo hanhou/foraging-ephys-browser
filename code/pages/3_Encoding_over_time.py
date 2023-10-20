@@ -40,11 +40,21 @@ area_aggr_func_mapping = {
                             r'% significant units': lambda x: sum(np.abs(x) > sign_level) / len(x) * 100,  # para_stat must be 't'
                             }
 
+# Define default time epoch over which we average beta to get coding direction
+# Note that the align_to here could be independent from the align_to in the psth
+coding_direction_beta_aver_epoch = {
+    'dQ': dict(align_to='iti_start', win=[0, 4]),
+    'sumQ': dict(align_to='iti_start', win=[0, 4]),
+    'reward': dict(align_to='choice', win=[0, 2]),
+    'chosen_value': dict(align_to='choice', win=[0, 2]),
+    'choice_this': dict(align_to='choice', win=[-0.2, 0.5]),
+    }
+
 
 def hash_xarray(ds):
     return hash(1)  # Fixed hash because I only have one dataset here
 
-@st.cache_data(ttl=3600, hash_funcs={xr.Dataset: hash_xarray})
+@st.cache_data(ttl=3600*24, hash_funcs={xr.Dataset: hash_xarray})
 def _get_data_from_zarr(ds, var_name, model, para_stat):
     return ds[var_name].sel(model=model, para_stat=para_stat).values  # Get values from zarr here to avoid too much overhead
     
@@ -286,7 +296,123 @@ def plot_beta_auto_corr(ds, model, align_tos, paras,
         
     return
 
+@st.cache_data(ttl=60*60*24)
+def _get_psth(psth_name, align_to, psth_grouped_by):
+    t_range = {f't_to_{align_to}': slice(*plot_settings[align_to]['win'])}
+    
+    mean_psth = ds_psth[psth_name].sel(stat='mean', **t_range).values
+    ts = ds_psth[f't_to_{align_to}'].sel(**t_range).values
+    group_name = ds_psth[f'psth_groups_{psth_grouped_by}'].values
+    
+    plot_spec = ds_psth[f'psth_setting_plot_spec_{psth_grouped_by}'].values
+    if 'reward' in psth_grouped_by:  # Bug fix
+        plot_spec = plot_spec[[1, 0, 3, 2]]
+    
+    return [mean_psth, ts, group_name, plot_spec]
+    
+@st.cache_data(ttl=60*60*24)
+def _get_coding_direction(model, para, align_to, beta_aver_epoch):
+    var_name = f'linear_fit_para_stats_aligned_to_{align_to}'
+    t_name = f'linear_fit_t_center_aligned_to_{align_to}'
+    
+    aver_betas = ds_linear_fit_over_time[var_name].sel(model=model,
+                                                       para=para, 
+                                                       para_stat='beta',
+                                                       **{t_name: slice(*beta_aver_epoch)}
+                                                       ).mean(dim=t_name).values
+    
+    return aver_betas / np.sqrt(np.sum(aver_betas**2))
+    
+def plot_psth_proj_on_CDs(
+                     model, psth_align_to,
+                     paras, psth_grouped_bys,
+                     combine_araes=True,
+                    ):
+        
+    for para in paras:  # Iterate over rows
+        
+        cols = st.columns([0.4] + [1] * len(psth_grouped_bys))    
+        
+        # Select time epoch for computing coding direction
+        cols[0].markdown(f'### {para}')
+        cols[0].markdown(f'###### Time epoch for CD:')
+        coding_direction_align_to = cols[0].selectbox('align to', 
+                                                      align_tos,
+                                                      align_tos.index(
+                                                          coding_direction_beta_aver_epoch[para]['align_to']),
+                                                      key=f'coding_direction_align_to_{para}')
+        cc = cols[0].columns([1, 1])
+        win_start = cc[0].text_input('start (sec)', 
+                                     value=coding_direction_beta_aver_epoch[para]['win'][0],
+                                     key=f'coding_direction_win_start_{para}',
+                                     )
+        win_end = cc[1].text_input('end (sec)',
+                                   value = coding_direction_beta_aver_epoch[para]['win'][1],
+                                   key=f'coding_direction_win_end_{para}',
+                                   )       
+        
+        # Compute coding direction (essentially normalized betas)
+        # Note that coding direction has independent align_to from psth
+        coding_direction = _get_coding_direction(model=model, 
+                                                 para=para, 
+                                                 align_to=coding_direction_align_to, 
+                                                 beta_aver_epoch=[win_start, win_end])
+                
+        # Plot units contribution to coding direction
+        fig = px.bar(np.sort(coding_direction))
+        fig.update_layout(showlegend=False, height=200, 
+                            yaxis=dict(title='sorted contribution to CD'),
+                            xaxis=dict(title='units'),
+                            margin=dict(l=0, r=0, t=0, b=0))
+        cols[0].plotly_chart(fig, use_container_width=True)
+        
+        # Plot PSTH projected on CD
+        for i, psth_grouped_by in enumerate(psth_grouped_bys):
+    
+            # Retrieve psths
+            psth_name = f'''psth_aligned_to_''' +\
+                        f'''{psth_align_mapping[psth_align_to]}_''' +\
+                        f'''grouped_by_{psth_grouped_by}'''
 
+            # Compute projection
+            psth, psth_t, psth_group_names, psth_plot_specs = _get_psth(psth_name, psth_align_to, psth_grouped_by)
+            psth_proj = (psth.reshape(psth.shape[0], -1).T @ coding_direction).reshape(psth.shape[1:])
+
+            # Do plotting
+            fig = go.Figure()            
+            for i_group in range(psth_proj.shape[0]):
+                fig.add_trace(go.Scatter(x=psth_t, 
+                                        y=psth_proj[i_group, :],
+                                        mode='lines', 
+                                        name=psth_group_names[i_group],
+                                        **eval(psth_plot_specs[i_group]),
+                                        ),
+                              )
+            
+            fig.update_layout(width=600,
+                              font_size=17, hovermode='closest',
+                              title_x=0.01,
+                              xaxis=dict(title=f'Time to {psth_align_to} (sec)'),
+                              yaxis=dict(visible=False),
+                              legend=dict(
+                                yanchor="top", y=1.3,
+                                xanchor="left", x=0,
+                                orientation="h",
+                                font_size=11,
+                              ),
+                              )
+            
+            # Increase line width for all scatter traces
+            for trace in fig.data:
+                if trace.type == 'scatter' and 'line' in dir(trace):
+                    if trace.line.width is not None:
+                        trace.line.width = trace.line.width + 1
+        
+            with cols[i+1]:
+                plotly_events(fig,
+                            #   override_width='100%',
+                              click_event=False)
+            
 
 if __name__ == '__main__':
 
@@ -299,14 +425,24 @@ if __name__ == '__main__':
     
     # --- 1. Fetch zarr ---
     try:   # Try local first (if in CO)
-        assert 0
-        zarr_store = '/root/capsule/data/datajoint_psth_linear_fit_over_timeall_linear_fit_over_time.zarr'
+        assert 1
+        zarr_store = '/root/capsule/data/datajoint_psth_combined/all_linear_fit_over_time.zarr'
         ds_linear_fit_over_time = xr.open_zarr(zarr_store, consolidated=True)
+        
+        zarr_store = '/root/capsule/data/datajoint_psth_combined/all_psth_over_time.zarr'
+        ds_psth = xr.open_zarr(zarr_store, consolidated=True)
+        
     except:  # Else, from s3
-        s3_path = f's3://aind-behavior-data/Han/ephys/export/psth/datajoint_psth_combined/all_linear_fit_over_time.zarr'
         fs = s3fs.S3FileSystem(anon=False)
+        
+        s3_path = f's3://aind-behavior-data/Han/ephys/export/psth/datajoint_psth_combined/all_linear_fit_over_time.zarr'
         zarr_store = s3fs.S3Map(root=s3_path, s3=fs, check=True)
         ds_linear_fit_over_time = xr.open_zarr(zarr_store, consolidated=True)
+
+        s3_path = f's3://aind-behavior-data/Han/ephys/export/psth/datajoint_psth_combined/all_psth_over_time.zarr'
+        zarr_store = s3fs.S3Map(root=s3_path, s3=fs, check=True)
+        ds_psth = xr.open_zarr(zarr_store, consolidated=True)
+
     
     align_tos = ds_linear_fit_over_time.align_tos
     models = ds_linear_fit_over_time.linear_models
@@ -427,7 +563,40 @@ if __name__ == '__main__':
                                   down_sample_t=down_sample_t)
     
     elif chosen_id == 'tab3':
-        pass
+                
+        cols = st.columns([0.5, 1, 1, 0.5])
+        selected_model = cols[0].selectbox('Linear model',
+                                                list(models.keys()), 
+                                                1,
+                                            )
+                        
+        available_paras_this_model = models[selected_model]
+        if_combine_araes = cols[0].checkbox('Combine areas', True)
         
+        selected_paras = cols[1].multiselect('Coding directions',
+                                            coding_direction_beta_aver_epoch.keys(), 
+                                            coding_direction_beta_aver_epoch.keys()
+                                            )
+        
+        psth_grouped_bys = list(ds_psth.psth_setting_grouped_bys.keys())
+        selected_grouped_bys = cols[2].multiselect('PSTH grouped bys',
+                                        psth_grouped_bys, 
+                                        psth_grouped_bys
+                                        )
+        psth_align_to = cols[3].selectbox('PSTH align to', 
+                                        align_tos,
+                                        1)
+        
+        psth_align_mapping = {'choice': 'Choice', 
+                              'iti_start': 'ITI_start', 'go_cue': 'Go_cue'}
+        
+        plot_psth_proj_on_CDs(
+                        model=selected_model, 
+                        psth_align_to=psth_align_to,
+                        paras=selected_paras,
+                        psth_grouped_bys=selected_grouped_bys,
+                        combine_araes=if_combine_araes)        
+
+                 
     if if_debug:
         p.stop()
