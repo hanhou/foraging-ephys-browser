@@ -356,9 +356,9 @@ def plot_psth_proj_on_CDs(
     df_unit_keys_filtered_and_with_aoi = df_unit_keys.merge(df_filtered_unit_with_aoi, on=primary_keys, how='right') 
     unit_ind_filtered = df_unit_keys_filtered_and_with_aoi.unit_ind
     
-    st.markdown(f'##### (N = {len(df_unit_keys_filtered_and_with_aoi)}, '
-                f'PSTH bin size = {ds_psth.bin_size:.2g} s, '
-                f'smoothed by half Gaussian kernel with $\sigma$ = {ds_psth.psth_aligned_to_Choice_grouped_by_choice_and_reward.smooth_sigma:.2g} s)')
+    st.markdown(f'##### (N = {len(df_unit_keys_filtered_and_with_aoi)} filtered on the side bar)')
+    st.markdown(f'##### PSTH bin size = {ds_psth.bin_size:.2g} s, '
+                f'smoothed by half Gaussian kernel with $\sigma$ = {ds_psth.psth_aligned_to_Choice_grouped_by_choice_and_reward.smooth_sigma:.2g} s')
 
     if len(unit_ind_filtered) == 0:
         st.write('No units selected!')
