@@ -232,6 +232,7 @@ def plot_beta_auto_corr(ds, model, align_tos, paras,
                                     z=corr_matrix,
                                     zmin=-max_val, 
                                     zmax=max_val,
+                                    zauto=False,
                                     x=ts,
                                     y=ts,
                                     colorscale='RdBu_r',
@@ -377,9 +378,11 @@ def plot_psth_proj_on_CDs(
         st.write('No units selected!')
         return
     
+    coding_directions = []
+    
     for para in paras:  # Iterate over rows
         
-        cols = st.columns([0.6] + [1] * len(psth_grouped_bys), gap="medium")    
+        cols = st.columns([0.6] + [1] * 4, gap="medium")    # To fix column width
         
         # Select time epoch for computing coding direction
         cols[0].markdown(f'### {para}')
@@ -407,6 +410,9 @@ def plot_psth_proj_on_CDs(
                                                  beta_aver_epoch=[win_start, win_end],
                                                  select_units=unit_ind_filtered.values,
                                                  )
+        
+        # Cache CDs
+        coding_directions.append(coding_direction)
                 
         # Plot units contribution to coding direction
         fig = px.bar(np.sort(coding_direction))
@@ -509,6 +515,60 @@ def plot_psth_proj_on_CDs(
                                 use_container_width=True,
                                )
     
+    # Add corrleation matrix of CD
+    
+    def plot_corr_matrix(z):
+        np.fill_diagonal(z, np.nan)  # Remove diagonal
+        # z[np.tril_indices(z.shape[0], 0)] = np.nan  # Remove upper triangle
+        
+        max_val = np.nanmax(np.abs(z - 90))
+        # fig = px.imshow(z,
+        #                 zmin=0, #90-max_val*1.1,  # Keep 90 deg in the middle
+        #                 zmax=90+max_val*1.1,
+        #                 x=paras,
+        #                 y=paras,
+        #                 color_continuous_scale='RdBu_r', 
+        #                 origin='upper')
+        
+        fig = go.Figure()
+        fig.add_trace(go.Heatmap(z=z,
+                                 zmin=90-max_val*1.1,  # Keep 90 deg in the middle
+                                 zmax=90+max_val*1.1,
+                                 zauto=False,
+                                 colorscale='RdBu',
+                                 x=paras,
+                                 y=paras,
+                                 )
+                      )
+        
+        fig.update_layout(**plotly_font(17),
+                          **plotly_square,
+                          yaxis_autorange='reversed',
+                          xaxis_side='top',
+                          plot_bgcolor='black',
+                        )
+        fig.for_each_xaxis(lambda x: x.update(showgrid=False))
+        fig.for_each_yaxis(lambda x: x.update(showgrid=False))
+        
+        return fig
+    
+    # # Pearson correlation coef
+    # corr_matrix = np.corrcoef(np.array(coding_directions))
+    # fig_corr = plot_corr_matrix(corr_matrix)
+    
+    # cos(theta)
+    cos_thetas = np.array([np.dot(cd1, cd2) for cd1 in coding_directions for cd2 in coding_directions]
+                          ).reshape(len(paras), len(paras))
+    thetas = np.arccos(cos_thetas) / np.pi * 180
+    fig_theta = plot_corr_matrix(thetas)
+    
+    cols = st.columns([1, 1, 1])
+    # with cols[0]:
+    #     st.markdown('#### Correlation matrix of coding directions')
+    #     st.plotly_chart(fig_corr)
+    with cols[0]:
+        st.markdown('#### Angles between coding directions')
+        plotly_events(fig_theta)
     
 
 if __name__ == '__main__':
@@ -554,7 +614,9 @@ if __name__ == '__main__':
                                 yaxis_title_font_size=x,
                                 legend_font_size=x,
                                 legend_title_font_size=x,)
-    
+    plotly_square = dict(xaxis=dict(scaleanchor="y", constrain="domain"),   # Make it square
+                         yaxis=dict(constrain="domain"))
+
     st.markdown('### Select a tab here 👇')
     chosen_id = stx.tab_bar(data=[
                                 stx.TabBarItemData(id="tab1", title="1. Fitting stats", description=""),
