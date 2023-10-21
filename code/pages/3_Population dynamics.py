@@ -508,7 +508,8 @@ def plot_psth_proj_on_CDs(
                 st.plotly_chart(fig,
                                 use_container_width=True,
                                )
-            
+    
+    
 
 if __name__ == '__main__':
 
@@ -688,13 +689,13 @@ if __name__ == '__main__':
                               'iti_start': 'ITI_start', 'go_cue': 'Go_cue'}
         
         plot_psth_proj_on_CDs(
-                        model=selected_model, 
-                        psth_align_to=psth_align_to,
-                        paras=selected_paras,
-                        psth_grouped_bys=selected_grouped_bys,
-                        # combine_araes=if_combine_araes
-                        if_error_bar=if_error_bar,
-                        )        
+                            model=selected_model, 
+                            psth_align_to=psth_align_to,
+                            paras=selected_paras,
+                            psth_grouped_bys=selected_grouped_bys,
+                            # combine_araes=if_combine_araes
+                            if_error_bar=if_error_bar,
+                            )        
 
                  
     if if_debug:
