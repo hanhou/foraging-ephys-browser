@@ -50,6 +50,8 @@ coding_direction_beta_aver_epoch = {
     'choice_this': dict(align_to='choice', win=[-0.2, 0.5]),
     }
 
+user_color_mapping = px.colors.qualitative.Plotly  # If not ccf color, use this color mapping
+
 
 def hash_xarray(ds):
     return hash(1)  # Fixed hash because I only have one dataset here
@@ -61,7 +63,8 @@ def _get_data_from_zarr(ds, var_name, model, para_stat):
 def plot_linear_fitting_over_time(ds, model, paras, align_tos,
                                   para_stat='t', aggr_func='median',
                                   if_95_CI=True,
-                                  if_sync_y=True):
+                                  if_sync_y=True,
+                                  if_use_ccf_color=True):
     
     fig = make_subplots(rows=len(paras), cols=len(align_tos), 
                         subplot_titles=align_tos,
@@ -94,7 +97,7 @@ def plot_linear_fitting_over_time(ds, model, paras, align_tos,
         data_all = _get_data_from_zarr(ds, var_name, model, para_stat)
             
         for row, para in enumerate(paras):       
-            for area, color in st.session_state.aoi_color_mapping.items():
+            for i, (area, color) in enumerate(st.session_state.aoi_color_mapping.items()):
                 # Get unit_ind for this area
                 unit_ind_this_area = df_unit_keys_filtered_and_with_aoi[df_unit_keys_filtered_and_with_aoi.area_of_interest == area].unit_ind
                 
@@ -111,11 +114,13 @@ def plot_linear_fitting_over_time(ds, model, paras, align_tos,
                 # Apply aggregation function
                 y = area_aggr_func_mapping[aggr_func](data_this)
                 
+                color_this = color if if_use_ccf_color else user_color_mapping[i%len(user_color_mapping)]
+                
                 if not if_95_CI:
                     fig.add_trace(go.Scattergl(x=ts, 
                                                 y=y,
                                                 mode='lines',
-                                                line=dict(color=color),
+                                                line=dict(color=color_this),
                                                 name=area,
                                                 legendgroup=area,
                                                 showlegend=col==0 and row ==0,
@@ -132,7 +137,7 @@ def plot_linear_fitting_over_time(ds, model, paras, align_tos,
                     add_plotly_errorbar(x=pd.Series(ts), 
                                         y=pd.Series(y),
                                         err=pd.Series(binomial_95_CI), 
-                                        color=color,
+                                        color=color_this,
                                         name=area,
                                         mode='lines',
                                         showlegend=col==0 and row ==0,
@@ -675,6 +680,7 @@ if __name__ == '__main__':
         colss = cols[0].columns([1, 1, 1])    
         if_95_CI = colss[0].checkbox('95% CI', True)
         if_sync_y = colss[1].checkbox('Sync y-axis', True)
+        if_use_ccf_color = colss[2].checkbox('Use CCF color', True)
         
         # --- 3. Plot ---
         if selected_model and selected_paras and selected_align_to:
@@ -687,6 +693,7 @@ if __name__ == '__main__':
                                                 align_tos=selected_align_to,
                                                 if_sync_y=if_sync_y,
                                                 if_95_CI=if_95_CI,
+                                                if_use_ccf_color=if_use_ccf_color,
             )
 
             plotly_events(fig, override_height=fig.layout.height*1.1, 
