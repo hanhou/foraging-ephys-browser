@@ -140,18 +140,29 @@ def _sig_proportion(ts, t_sign_level):
     return prop * 100, ci_95 * 100, len(ts)
 
 
-def plot_unit_sig_prop_bar(aois, period, t_sign_level):
+def plot_unit_sig_prop_bar(aois, period, t_sign_level, rpe_or_reward_and_Q='rpe'):
     p_value = t_to_p(t_sign_level)
     
-    model_groups = {('dQ, sumQ, rew, chQ', 'contraQ, ipsiQ, rew, chQ'): ['simple model',   # Name
-                                                               [p for p in sig_prop_vars if 'action_value' in p or p in ['reward', 'chosen_value']], # Para to include
-                                                               dict(pattern_shape='/', pattern_fillmode="replace") # Setting
-                                                               ],
-                    ('dQ, sumQ, rew, chQ, C*2, R*5, t', 'contraQ, ipsiQ, rew, chQ, C*2, R*5, t'): ['full model',
-                                                                                         [p for p in sig_prop_vars if 'action_value' in p or p in 
-                                                                                          ['reward', 'chosen_value', 'choice_ic', 'choice_ic_next', 'trial_normalized', 'firing_1_back']],
-                                                                                         dict()],
-                    }   
+    if rpe_or_reward_and_Q == 'rpe':  # Whether separate reward and Q
+        model_groups = {('dQ, sumQ, rew, chQ', 'contraQ, ipsiQ, rew, chQ'): ['simple model',   # Name
+                                                                [p for p in sig_prop_vars if 'action_value' in p or p in ['reward', 'chosen_value']], # Para to include
+                                                                dict(pattern_shape='/', pattern_fillmode="replace") # Setting
+                                                                ],
+                        ('dQ, sumQ, rew, chQ, C*2, R*5, t', 'contraQ, ipsiQ, rew, chQ, C*2, R*5, t'): ['full model',
+                                                                                            [p for p in sig_prop_vars if 'action_value' in p or p in 
+                                                                                            ['reward', 'chosen_value', 'choice_ic', 'choice_ic_next', 'trial_normalized', 'firing_1_back']],
+                                                                                            dict()],
+                        }   
+    else:
+        model_groups = {('dQ, sumQ, rpe', 'contraQ, ipsiQ, rpe'): ['simple model',   # Name
+                                                                [p for p in sig_prop_vars if 'action_value' in p or p in ['rpe']], # Para to include
+                                                                dict(pattern_shape='/', pattern_fillmode="replace") # Setting
+                                                                ],
+                    ('dQ, sumQ, rpe, C*2, R*5, t', 'contraQ, ipsiQ, rpe, C*2, R*5, t'): ['full model',
+                                                                                            [p for p in sig_prop_vars if 'action_value' in p or p in 
+                                                                                            ['rpe', 'choice_ic', 'choice_ic_next', 'trial_normalized', 'firing_1_back']],
+                                                                                            dict()],
+        }
     
     fig = go.Figure()
     
@@ -454,22 +465,32 @@ if __name__ == '__main__':
         _period = [p for p in period_name_mapper if period_name_mapper[p] == period][0]
         aois = cols[1].multiselect('Areas to include', st.session_state.aoi_color_mapping.keys(), st.session_state.aoi_color_mapping)
         
+        # Whether use rpe or reward + chosenQ
+        rpe_or_reward_and_Q = cols[2].selectbox('Use reward + chosenQ or RPE', ['reward + chosenQ', 'RPE'])
+        
         # -- bar plot of significant units --
         with st.expander('Bar plot of significant units', expanded=True):
             fig = plot_unit_sig_prop_bar(period=_period,
                                         aois=aois,
-                                        t_sign_level=st.session_state['t_sign_level'])
+                                        t_sign_level=st.session_state['t_sign_level'],
+                                        rpe_or_reward_and_Q=rpe_or_reward_and_Q)
             
             st.plotly_chart(fig, use_container_width=True) # Only plotly_chart keeps the bar plot pattern
         
         # -- bar plot of pure units --
         with st.expander('Bar plot of pure units', expanded=True):
             model_name = st.columns([1, 5])[0].selectbox('Model for polar classification', ['dQ + sumQ + ...', 'contraQ + ipsiQ + ...'], 0)
-            model = {'dQ + sumQ + ...': 'dQ, sumQ, rew, chQ', 'contraQ + ipsiQ + ...': 'contraQ, ipsiQ, rew, chQ'}[model_name]
+            
+            if rpe_or_reward_and_Q == 'reward + chosenQ':
+                model = {'dQ + sumQ + ...': 'dQ, sumQ, rew, chQ', 'contraQ + ipsiQ + ...': 'contraQ, ipsiQ, rew, chQ'}[model_name]
+            else:
+                model = {'dQ + sumQ + ...': 'dQ, sumQ, rpe', 'contraQ + ipsiQ + ...': 'contraQ, ipsiQ, rpe'}[model_name]
+                
             fig = plot_unit_pure_sig_prop_bar(period=_period,
                                             aois=aois,
                                             t_sign_level=st.session_state['t_sign_level'],
-                                            model=model)        
+                                            model=model,
+                                            )        
             st.plotly_chart(fig, use_container_width=True) # Only plotly_chart keeps the bar plot pattern
 
         # -- illustrate polar classfier --
