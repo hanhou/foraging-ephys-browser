@@ -170,6 +170,8 @@ def filter_dataframe(df: pd.DataFrame) -> pd.DataFrame:
                 ll, rr = right.columns([5, 1])
                 ll.markdown(f"Filter for **{column}**")
                 select_all = rr.button('all', key=f'select_all_{column}')
+                if select_all:
+                    ss[f'select_{column}_cache'] = list(df[column].unique())  # Manually cache 'all' press
                 selected = right.multiselect(
                     f"Values for {column}",
                     df[column].unique(),
