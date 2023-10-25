@@ -86,3 +86,8 @@ polar_classifiers = {'dQ, sumQ, rpe': [{'x_name': 'relative_action_value_ic', 'y
 
 polar_classifiers['dQ, sumQ, rew, chQ'] = polar_classifiers['dQ, sumQ, rpe']
 polar_classifiers['contraQ, ipsiQ, rew, chQ'] = polar_classifiers['contraQ, ipsiQ, rpe']
+polar_classifiers['dQ, sumQ, rew, chQ, C*2'] = polar_classifiers['dQ, sumQ, rpe']
+polar_classifiers['contraQ, ipsiQ, rew, chQ, C*2'] = polar_classifiers['contraQ, ipsiQ, rpe']
+
+polar_classifiers['dQ, sumQ, rpe, C*2'] = polar_classifiers['dQ, sumQ, rpe']
+polar_classifiers['contraQ, ipsiQ, rpe, C*2'] = polar_classifiers['contraQ, ipsiQ, rpe']

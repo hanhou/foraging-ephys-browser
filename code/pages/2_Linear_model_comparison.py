@@ -236,9 +236,9 @@ def plot_unit_pure_sig_prop_bar(aois, period, t_sign_level, model='dQ, sumQ, rew
                                 polar_classifiers[model][1].keys(), # Para to include
                                 dict(pattern_shape='/', pattern_fillmode="replace") # Setting
                                 ],
-                    (model + ', C*2, R*5, t'): ['full model',
-                                                    polar_classifiers[model][1].keys(),
-                                                    dict()],
+                    (model+', R*5, t') if 'dQ' in model else (model+', C*2, R*5, t'): ['full model',
+                                                                                        polar_classifiers[model][1].keys(),
+                                                                                        dict()],
                     }   
     
     fig = go.Figure()
@@ -300,7 +300,7 @@ def plot_unit_pure_sig_prop_bar(aois, period, t_sign_level, model='dQ, sumQ, rew
 def plot_unit_class_scatter(period, model='dQ, sumQ, rew, chQ'):
 
     x_name, y_name = polar_classifiers[model][0].values()
-    models = {(model): 'simple model', (model+', C*2, R*5, t'): 'full model'}  
+    models = {(model): 'simple model', (model+', R*5, t') if 'dQ' in model else (model+', C*2, R*5, t'): 'full model'}  
 
     # fig = make_subplots(rows=1, cols=2, column_titles=list(model_groups.keys()))
     
@@ -484,9 +484,9 @@ if __name__ == '__main__':
             model_name = st.columns([1, 5])[0].selectbox('Model for polar classification', ['dQ + sumQ + ...', 'contraQ + ipsiQ + ...'], 0)
             
             if rpe_or_reward_and_Q == 'reward + chosenQ':
-                model = {'dQ + sumQ + ...': 'dQ, sumQ, rew, chQ', 'contraQ + ipsiQ + ...': 'contraQ, ipsiQ, rew, chQ'}[model_name]
+                model = {'dQ + sumQ + ...': 'dQ, sumQ, rew, chQ, C*2', 'contraQ + ipsiQ + ...': 'contraQ, ipsiQ, rew, chQ'}[model_name]
             else:
-                model = {'dQ + sumQ + ...': 'dQ, sumQ, rpe', 'contraQ + ipsiQ + ...': 'contraQ, ipsiQ, rpe'}[model_name]
+                model = {'dQ + sumQ + ...': 'dQ, sumQ, rpe, C*2', 'contraQ + ipsiQ + ...': 'contraQ, ipsiQ, rpe'}[model_name]
                 
             fig = plot_unit_pure_sig_prop_bar(period=_period,
                                             aois=aois,
