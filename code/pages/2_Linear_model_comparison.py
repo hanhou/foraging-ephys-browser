@@ -18,11 +18,13 @@ from Home import init, _to_theta_r, select_t_sign_level, t_to_p, p_to_t
 
 @st.cache_data(max_entries=100)
 def plot_model_comparison():
-    df_period_linear_fit_melt = df_period_linear_fit_filtered.iloc[:, df_period_linear_fit_filtered.columns.get_level_values(-2)=='rel_bic'
+    df_period_linear_fit_melt = df_period_linear_fit_filtered.iloc[:, 
+                                                                   df_period_linear_fit_filtered.columns.get_level_values(-2)=='rel_bic'
                                                             ].stack(level=[0, 1]
                                                                     ).droplevel(axis=1, level=1
                                                                                 ).reset_index()
-    fig = px.box(df_period_linear_fit_melt.query('multi_linear_model in @all_models'
+    models = [m for m in all_models if 'rew' in m]     # Manual filtering                                                                  
+    fig = px.box(df_period_linear_fit_melt.query('multi_linear_model in @models'
                                                  ).replace(model_name_mapper),
                  x='period', y='rel_bic', 
                  color='multi_linear_model', 
@@ -143,7 +145,17 @@ def _sig_proportion(ts, t_sign_level):
 def plot_unit_sig_prop_bar(aois, period, t_sign_level, rpe_or_reward_and_Q='rpe'):
     p_value = t_to_p(t_sign_level)
     
-    if rpe_or_reward_and_Q == 'rpe':  # Whether separate reward and Q
+    if rpe_or_reward_and_Q == 'RPE':  # Whether separate reward and Q
+        model_groups = {('dQ, sumQ, rpe', 'contraQ, ipsiQ, rpe'): ['simple model',   # Name
+                                                                [p for p in sig_prop_vars if 'action_value' in p or p in ['rpe']], # Para to include
+                                                                dict(pattern_shape='/', pattern_fillmode="replace") # Setting
+                                                                ],
+                         ('dQ, sumQ, rpe, C*2, R*5, t', 'contraQ, ipsiQ, rpe, C*2, R*5, t'): ['full model',
+                                                                                            [p for p in sig_prop_vars if 'action_value' in p or p in 
+                                                                                            ['rpe', 'choice_ic', 'choice_ic_next', 'trial_normalized', 'firing_1_back']],
+                                                                                            dict()],
+        }
+    else:
         model_groups = {('dQ, sumQ, rew, chQ', 'contraQ, ipsiQ, rew, chQ'): ['simple model',   # Name
                                                                 [p for p in sig_prop_vars if 'action_value' in p or p in ['reward', 'chosen_value']], # Para to include
                                                                 dict(pattern_shape='/', pattern_fillmode="replace") # Setting
@@ -153,16 +165,6 @@ def plot_unit_sig_prop_bar(aois, period, t_sign_level, rpe_or_reward_and_Q='rpe'
                                                                                             ['reward', 'chosen_value', 'choice_ic', 'choice_ic_next', 'trial_normalized', 'firing_1_back']],
                                                                                             dict()],
                         }   
-    else:
-        model_groups = {('dQ, sumQ, rpe', 'contraQ, ipsiQ, rpe'): ['simple model',   # Name
-                                                                [p for p in sig_prop_vars if 'action_value' in p or p in ['rpe']], # Para to include
-                                                                dict(pattern_shape='/', pattern_fillmode="replace") # Setting
-                                                                ],
-                    ('dQ, sumQ, rpe, C*2, R*5, t', 'contraQ, ipsiQ, rpe, C*2, R*5, t'): ['full model',
-                                                                                            [p for p in sig_prop_vars if 'action_value' in p or p in 
-                                                                                            ['rpe', 'choice_ic', 'choice_ic_next', 'trial_normalized', 'firing_1_back']],
-                                                                                            dict()],
-        }
     
     fig = go.Figure()
     
