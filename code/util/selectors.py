@@ -53,7 +53,7 @@ def select_para(multi=True,
     else:
         para_name = col.selectbox(label, 
                                   [para_name_mapper[p] for p in available_paras],
-                                  available_paras.index(default_paras),
+                                  available_paras.index(default_paras) if default_paras in available_paras else 0,
                                   key=f'para_name{suffix}'
                                   )
         return para_name, [p for p in para_name_mapper if para_name_mapper[p] == para_name][0]
