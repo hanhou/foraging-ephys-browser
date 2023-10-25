@@ -26,10 +26,12 @@ def _get_min_max():
     return np.percentile(x_gamma_all, 5), np.percentile(x_gamma_all, 95)
 
 def _size_mapping(x):
-    x = x / np.quantile(x, 0.95)
+    x = x / np.quantile(x[~np.isnan(x)], 0.95)
     x_gamma = x**size_gamma
     min_x, max_x = _get_min_max()
-    return size_range[0] + x_gamma / (max_x - min_x) * (size_range[1] - size_range[0])
+    sizes = size_range[0] + x_gamma / (max_x - min_x) * (size_range[1] - size_range[0])
+    sizes[np.isnan(sizes)] = 0
+    return sizes
 
 def _smooth_heatmap(data, sigma):
     '''https://stackoverflow.com/questions/18697532/gaussian-filtering-a-image-with-nan-in-python/36307291#36307291'''
