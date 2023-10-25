@@ -89,7 +89,7 @@ def draw_ccf_annotations(fig, slice, slice_name, edges, message):
     xx, yy = edges
     fig.add_trace(go.Scattergl(x=yy * CCF_RESOLUTION, y=xx * CCF_RESOLUTION, 
                              mode='markers',
-                             marker={'color': 'rgba(0, 0, 0, 0.3)', 'size': 2},
+                             marker={'color': f'rgba(0, 0, 0, {ss.ccf_edge_alpha})', 'size': ss.ccf_edge_size},
                              hoverinfo='skip',
                              showlegend=False,
                              ))
@@ -485,7 +485,10 @@ if __name__ == '__main__':
                         heatmap_bin_size = st.slider("Heatmap bin size", 25, 500, step=25, value=100)
                         heatmap_smooth = st.slider("Heatmap smooth factor", 0.0, 2.0, step=0.1, value=1.0)
                 
-            ss.if_flip = st.checkbox("Flip to left hemisphere", value=True)  
+            ss.if_flip = st.checkbox("Flip to left hemisphere", value=True)
+            with st.expander("CCF edge setting", expanded=False):
+                ss.ccf_edge_alpha = st.slider("CCF edge alpha", 0.0, 1.0, step=0.1, value=0.3)
+                ss.ccf_edge_size = st.slider("CCF edge size", 0, 10, step=1, value=2)
             
         add_unit_selector()      
 
