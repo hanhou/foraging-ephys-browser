@@ -613,12 +613,6 @@ if __name__ == '__main__':
     win_step = ds_linear_fit_over_time['linear_fit_t_center_aligned_to_choice'][1].values\
              - ds_linear_fit_over_time['linear_fit_t_center_aligned_to_choice'][0].values
     
-    plotly_font = lambda x: dict(xaxis_tickfont_size=x,
-                                xaxis_title_font_size=x,
-                                yaxis_tickfont_size=x,
-                                yaxis_title_font_size=x,
-                                legend_font_size=x,
-                                legend_title_font_size=x,)
     plotly_square = dict(xaxis=dict(scaleanchor="y", constrain="domain"),   # Make it square
                          yaxis=dict(constrain="domain"))
 

@@ -109,7 +109,8 @@ def plot_scatter(data, size=10, opacity=0.5, equal_axis=False, show_diag=False, 
     fig.update_layout(width=1000, height=900, font=dict(size=20), 
                       hovermode='closest', showlegend=True, dragmode='select',
                       xaxis_title=x_name + x_period, 
-                      yaxis_title=y_name + y_period,)
+                      yaxis_title=y_name + y_period,
+                      **plotly_font(30))
             
     return fig
 
