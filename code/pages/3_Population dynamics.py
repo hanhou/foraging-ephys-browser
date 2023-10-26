@@ -45,7 +45,8 @@ area_aggr_func_mapping = {
 coding_direction_beta_aver_epoch = {
     'dQ': dict(align_to='iti_start', win=[0, 4]),
     'sumQ': dict(align_to='iti_start', win=[0, 4]),
-    'reward': dict(align_to='choice', win=[0, 2]),
+    #'reward': dict(align_to='choice', win=[0, 2]),
+    'reward': dict(align_to='iti_start', win=[0, 4]),
     'chosen_value': dict(align_to='choice', win=[0, 2]),
     'choice_this': dict(align_to='choice', win=[-0.2, 0.5]),
     }
