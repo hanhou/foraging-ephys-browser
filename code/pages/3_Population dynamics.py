@@ -336,15 +336,18 @@ def _get_coding_direction(model, para, align_to, beta_aver_epoch, select_units):
 
 
 def compute_psth_proj_on_CD(psth, psth_sem, coding_direction, if_error_bar):
-    # Handle PSTHs with some nan values
-    psth_reshaped = psth.reshape(psth.shape[0], -1)
+    # Handle PSTHs with nans from two sources
+    # 1. Some units' beta coefficients are nan (due to bad fitting), which is handled here
+    # 2. Some grouped PSTH are nan (due to missing groups in PSTH); don't need to handle
+    # nan_groups = np.isnan(psth).all(axis=2).all(axis=0)
+    psth_reshaped = psth.reshape(psth.shape[0], -1)   # From (n_neuron, n_group, n_time) to (n_neuron, n_group * n_time)
     psth_sem_reshaped = psth_sem.reshape(psth_sem.shape[0], -1)
-    nan_idx = np.any(np.isnan(psth_reshaped), axis=1)
+    nan_units = np.isnan(coding_direction)
     
-    psth_reshaped_valid = psth_reshaped[~nan_idx]
-    psth_sem_reshaped_valid = psth_sem_reshaped[~nan_idx]
+    psth_reshaped_valid = psth_reshaped[~nan_units]
+    psth_sem_reshaped_valid = psth_sem_reshaped[~nan_units]
     
-    coding_direction_valid = coding_direction[~nan_idx]  # Remove nan units (temporary fix)
+    coding_direction_valid = coding_direction[~nan_units]  # Remove nan units (temporary fix)
     coding_direction_valid = coding_direction_valid / np.sqrt(np.sum(coding_direction_valid**2)) # Renormalize
     
     # Do projection
