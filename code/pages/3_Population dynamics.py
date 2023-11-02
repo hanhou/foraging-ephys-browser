@@ -304,7 +304,7 @@ def plot_beta_auto_corr(ds, model, align_tos, paras,
     return
 
 @st.cache_data(ttl=60*60*24)
-def _get_psth(psth_name, align_to, psth_grouped_by, select_units):
+def _get_psth(psth_name, align_to, psth_grouped_by, select_units, lr_or_ic, right_unit_to_flip):
     t_range = {f't_to_{align_to}': slice(*plot_settings[align_to]['win'])}
     
     psth_mean, psth_sem = ds_psth[psth_name].sel(stat=['mean', 'sem'], 
@@ -317,6 +317,17 @@ def _get_psth(psth_name, align_to, psth_grouped_by, select_units):
     plot_spec = ds_psth[f'psth_setting_plot_spec_{psth_grouped_by}'].values
     if 'reward' in psth_grouped_by:  # Bug fix
         plot_spec = plot_spec[[1, 0, 3, 2]]
+        
+    # Flip lr to ic if needed
+    if lr_or_ic == 'Ipsi and Contra':
+        if 'choice' in psth_grouped_by:
+            psth_mean[right_unit_to_flip] = psth_mean[right_unit_to_flip][:, [2, 3, 0, 1]]
+            psth_sem[right_unit_to_flip] = psth_sem[right_unit_to_flip][:, [2, 3, 0, 1]]
+            group_name = ['ipsi, no_rew', 'ipsi, rew', 'contra, no_rew', 'contra, rew']
+        elif 'dQ' in psth_grouped_by:
+            psth_mean[right_unit_to_flip] = np.flip(psth_mean[right_unit_to_flip], axis=1)
+            psth_sem[right_unit_to_flip] = np.flip(psth_sem[right_unit_to_flip], axis=1)           
+        
     
     return [psth_mean, psth_sem, ts, group_name, plot_spec]
     
@@ -368,16 +379,21 @@ def plot_psth_proj_on_CDs(
                      paras, psth_grouped_bys,
                     #  combine_araes=True,
                     if_error_bar=False,
+                    lr_or_ic='Left and Right',
                     ):
 
     # Retrieve unit_keys from dataset
     df_unit_keys = ds_psth[primary_keys].to_dataframe().reset_index()
-    df_filtered_unit_with_aoi = st.session_state.df_unit_filtered[primary_keys + ['area_of_interest']]
+    df_filtered_unit_with_aoi = st.session_state.df_unit_filtered[primary_keys + ['area_of_interest'] + ['ccf_z']]
     
     # Add aoi to df_unit_keys; right join to apply the filtering
     # Because ds_psth and ds_linear_fit_over_time share the same unit_ind, we can use the same unit_ind to filter
     df_unit_keys_filtered_and_with_aoi = df_unit_keys.merge(df_filtered_unit_with_aoi, on=primary_keys, how='right') 
     unit_ind_filtered = df_unit_keys_filtered_and_with_aoi.unit_ind
+    
+    # Get hemisphere info
+    right_unit_to_flip = df_unit_keys_filtered_and_with_aoi[df_unit_keys_filtered_and_with_aoi.ccf_z >= 5700].index.values
+    lr_or_ic_text = {'Ipsi and Contra': '(I/C)', 'Left and Right': '(L/R)'}[lr_or_ic]
     
     st.markdown(f'##### (N = {len(df_unit_keys_filtered_and_with_aoi)} filtered on the side bar)')
     st.markdown(f'##### PSTH bin size = {ds_psth.bin_size:.2g} s, '
@@ -394,7 +410,7 @@ def plot_psth_proj_on_CDs(
         cols = st.columns([0.6] + [1] * 4, gap="medium")    # To fix column width
         
         # Select time epoch for computing coding direction
-        cols[0].markdown(f'### {para}')
+        cols[0].markdown(f'''### {para} {lr_or_ic_text if para == 'dQ' or 'choice' in para else ''}''')
         cols[0].markdown(f'###### Time epoch for CD:')
         coding_direction_align_to = cols[0].selectbox('align to', 
                                                       align_tos,
@@ -420,6 +436,10 @@ def plot_psth_proj_on_CDs(
                                                  select_units=unit_ind_filtered.values,
                                                  )
         
+        # Flip lr to ipsi/contra if needed
+        if lr_or_ic == 'Ipsi and Contra' and para in ['dQ', 'choice_this', 'choice_next']:
+            coding_direction[right_unit_to_flip] = -coding_direction[right_unit_to_flip]
+        
         # Cache CDs
         coding_directions.append(coding_direction)
                 
@@ -443,13 +463,16 @@ def plot_psth_proj_on_CDs(
                                                                             align_to=psth_align_to, 
                                                                             psth_grouped_by=psth_grouped_by,
                                                                             select_units=unit_ind_filtered.values,
+                                                                            lr_or_ic=lr_or_ic,
+                                                                            right_unit_to_flip=right_unit_to_flip,
                                                                             )
-            
+                        
             # Compute projection
             psth_proj, psth_proj_95CI = compute_psth_proj_on_CD(psth=psth, 
-                                                                          psth_sem=psth_sem,
-                                                                          coding_direction=coding_direction, 
-                                                                          if_error_bar=if_error_bar)
+                                                                psth_sem=psth_sem,
+                                                                coding_direction=coding_direction, 
+                                                                if_error_bar=if_error_bar
+                                                                )
             
             # Do plotting
             fig = go.Figure()            
@@ -743,6 +766,12 @@ if __name__ == '__main__':
                                             coding_direction_beta_aver_epoch.keys()
                                             )
         
+        selected_lr_or_ic = cols[1].selectbox('L/R or Ipsi/Contra',
+                                              ['Left and Right', 
+                                               'Ipsi and Contra'], 
+                                              0
+                                            )
+        
         psth_grouped_bys = list(ds_psth.psth_setting_grouped_bys.keys())
         selected_grouped_bys = cols[2].multiselect('PSTH grouped bys',
                                         psth_grouped_bys, 
@@ -762,6 +791,7 @@ if __name__ == '__main__':
                             psth_grouped_bys=selected_grouped_bys,
                             # combine_araes=if_combine_araes
                             if_error_bar=if_error_bar,
+                            lr_or_ic = selected_lr_or_ic,
                             )        
 
                  
