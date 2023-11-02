@@ -353,7 +353,12 @@ def compute_psth_proj_on_CD(psth, psth_sem, coding_direction, if_error_bar):
     # nan_groups = np.isnan(psth).all(axis=2).all(axis=0)
     psth_reshaped = psth.reshape(psth.shape[0], -1)   # From (n_neuron, n_group, n_time) to (n_neuron, n_group * n_time)
     psth_sem_reshaped = psth_sem.reshape(psth_sem.shape[0], -1)
-    nan_units = np.isnan(coding_direction)
+    
+    nan_units = np.isnan(coding_direction) | np.isnan(psth_reshaped).any(axis=1)  # Remove both of the two cases above
+    if np.sum(~nan_units) == 0:
+        # If all units are removed, allow some missing groups in PSTH (remove 1, but allow for 2)
+        nan_units = np.isnan(coding_direction)
+        # st.write(f'{np.sum(nan_units)} units excluded due to nan in coding direction or PSTH')
     
     psth_reshaped_valid = psth_reshaped[~nan_units]
     psth_sem_reshaped_valid = psth_sem_reshaped[~nan_units]
