@@ -2,6 +2,11 @@ import streamlit as st
 
 st.set_page_config(layout="centered")
 
+st.set_page_config(layout="centered", 
+                   page_title='Foraging ephys browser (obsoleted)',
+                   page_icon='⚡',
+)
+
 def app():
     st.markdown('## Dear Foraging Ephys Browser user, \n'
                 '#### For better stability and accessibility, this Ephys app has been migrated to Amazon ECS (thank you Yosef and Jon 🙌).\n'
