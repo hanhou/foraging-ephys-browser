@@ -1,7 +1,5 @@
 import streamlit as st
 
-st.set_page_config(layout="centered")
-
 st.set_page_config(layout="centered", 
                    page_title='Foraging ephys browser (obsoleted)',
                    page_icon='⚡',
