@@ -1,0 +1,6 @@
+.git
+.github
+.gitignore
+.venv
+venv
+.streamlit/.secrets*
